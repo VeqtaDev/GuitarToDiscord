@@ -182,6 +182,24 @@ fn channel_combo(ui: &mut egui::Ui, id: &str, value: &mut ChannelSel, channels: 
     changed
 }
 
+fn draw_pick(p: &egui::Painter, r: egui::Rect) {
+    // Rounded-triangle guitar pick, red gradient, white rim.
+    let n = 40;
+    let mut pts = Vec::with_capacity(n);
+    for i in 0..n {
+        let a = i as f32 / n as f32 * std::f32::consts::TAU;
+        let (sx, sy) = (a.sin(), -a.cos());
+        // wider at the top, pointed at the bottom
+        let w = if sy > 0.0 { 1.0 - 0.55 * sy } else { 1.0 };
+        pts.push(egui::pos2(r.center().x + sx * r.width() * 0.5 * w, r.center().y + sy * r.height() * 0.5));
+    }
+    p.add(egui::Shape::convex_polygon(pts.clone(), theme::RED_HOT, egui::Stroke::new(2.0, egui::Color32::WHITE)));
+    p.line_segment(
+        [egui::pos2(r.left() + r.width() * 0.3, r.top() + r.height() * 0.32), egui::pos2(r.right() - r.width() * 0.3, r.top() + r.height() * 0.32)],
+        egui::Stroke::new(2.0, theme::white(0.85)),
+    );
+}
+
 fn open_url(url: &str) {
     let _ = std::process::Command::new("explorer").arg(url).spawn();
 }
@@ -208,15 +226,19 @@ impl eframe::App for App {
 
         egui::Frame::new().inner_margin(egui::Margin::symmetric(22, 18)).show(ui, |ui| {
             self.header(ui, t);
-            ui.add_space(14.0);
-            ui.horizontal(|ui| {
-                theme::segmented(ui, "tabs", &mut self.tab, &["Routing", "Plugins VST3", "Aide"]);
-            });
-            ui.add_space(12.0);
+            ui.add_space(18.0);
+            let title = match self.tab {
+                0 => ("Ta guitare, dans ton vocal.", "Carte son et micro de casque, envoyés dans un seul micro."),
+                1 => ("Tes plugins, ta chaîne.", "Scan auto des dossiers VST3 de Windows et des tiens."),
+                _ => ("Prêt en 3 minutes.", "Une seule installation, puis tu branches et tu joues."),
+            };
+            ui.label(RichText::new(title.0).font(theme::black(38.0)).color(egui::Color32::WHITE));
+            ui.label(RichText::new(title.1).font(theme::bold(15.0)).color(theme::INK2));
+            ui.add_space(22.0);
             if let Some(err) = self.error.clone() {
                 theme::card(ui, 0.9, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("⚠").size(18.0));
+                        ui.label(RichText::new("!").font(theme::black(18.0)).color(theme::RED_HOT));
                         ui.label(RichText::new(err).color(TEXT));
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if theme::chip(ui, "Fermer").clicked() {
@@ -251,39 +273,37 @@ impl eframe::App for App {
 impl App {
     fn header(&mut self, ui: &mut egui::Ui, t: f32) {
         let running = self.engine.is_some();
-        let h = 64.0;
+        let h = 54.0;
         let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), h), egui::Sense::hover());
-        for s in theme::glass_shapes(rect, h / 2.0, 0.35) {
-            ui.painter().add(s);
-        }
-        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink2(Vec2::new(18.0, 10.0))).layout(Layout::left_to_right(Align::Center)));
-        let ui = &mut child;
-        // Logo mark
-        let (lr, _) = ui.allocate_exact_size(Vec2::splat(40.0), egui::Sense::hover());
-        ui.painter().add(theme::gradient_rrect(lr, 13.0, |p| {
-            let k = ((p.x - lr.left()) + (p.y - lr.top())) / (lr.width() * 2.0);
-            if k < 0.5 { theme::RED_HOT } else { theme::RED_DEEP }
-        }));
-        ui.painter().text(lr.center(), egui::Align2::CENTER_CENTER, "🎸", egui::FontId::proportional(20.0), TEXT);
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            ui.add_space(4.0);
-            ui.label(RichText::new("Guitar To Discord").font(theme::bold(20.0)).color(TEXT));
-            ui.label(RichText::new("Guitare + voix → un seul micro").size(12.5).color(TEXT_DIM));
-        });
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            let label = if running { "Arrêter" } else { "Démarrer" };
-            if theme::pill_button(ui, label, !running, 140.0).clicked() {
-                if running {
-                    self.stop();
-                } else {
-                    self.start();
-                }
+        // Logo: guitar pick + lowercase wordmark, like "roamly".
+        let pick = egui::Rect::from_min_size(egui::pos2(rect.left(), rect.center().y - 15.0), Vec2::splat(30.0));
+        draw_pick(ui.painter(), pick);
+        ui.painter().text(
+            egui::pos2(pick.right() + 8.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            "guitartodiscord",
+            theme::black(21.0),
+            egui::Color32::WHITE,
+        );
+        // Centered nav pill.
+        let nav_w = 330.0;
+        let nav = egui::Rect::from_center_size(rect.center(), Vec2::new(nav_w, h));
+        let mut nav_ui = ui.new_child(egui::UiBuilder::new().max_rect(nav).layout(Layout::left_to_right(Align::Center)));
+        theme::segmented(&mut nav_ui, "tabs", &mut self.tab, &["Routing", "Plugins", "Aide"]);
+        // Right: status + start/stop.
+        let right = egui::Rect::from_min_max(egui::pos2(nav.right() + 10.0, rect.top()), rect.right_bottom());
+        let mut r_ui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(Layout::right_to_left(Align::Center)));
+        let label = if running { "Arrêter" } else { "Démarrer" };
+        if theme::pill_button(&mut r_ui, label, !running, 170.0).clicked() {
+            if running {
+                self.stop();
+            } else {
+                self.start();
             }
-            ui.add_space(6.0);
-            ui.label(RichText::new(if running { "En direct" } else { "Arrêté" }).font(theme::bold(13.0)).color(if running { theme::OK } else { TEXT_DIM }));
-            theme::status_dot(ui, running, t);
-        });
+        }
+        r_ui.add_space(8.0);
+        r_ui.label(RichText::new(if running { "En direct" } else { "Arrêté" }).font(theme::bold(14.0)).color(egui::Color32::WHITE));
+        theme::status_dot(&mut r_ui, running, t);
     }
 
     fn routing_tab(&mut self, ui: &mut egui::Ui) {
@@ -293,7 +313,7 @@ impl App {
             // ---------------- left column: inputs ----------------
             ui.allocate_ui_with_layout(Vec2::new(col_w, 0.0), Layout::top_down(Align::Min), |ui| {
                 theme::card(ui, 0.25, |ui| {
-                    theme::section_title(ui, "🎸", "Guitare", "Ta carte son (Focusrite, Scarlett…)");
+                    theme::section_title(ui, "♫", "Guitare", "Ta carte son (Focusrite, Scarlett…)");
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("Pilote").color(TEXT_DIM));
                         let mut host = self.cfg.host.clone().unwrap_or_else(|| self.hosts.first().cloned().unwrap_or_default());
@@ -348,7 +368,7 @@ impl App {
                 });
                 ui.add_space(14.0);
                 theme::card(ui, 0.15, |ui| {
-                    theme::section_title(ui, "🎙", "Micro", "Ton casque ou ton micro habituel");
+                    theme::section_title(ui, "◉", "Micro", "Ton casque ou ton micro habituel");
                     if device_combo(ui, "mic_dev", &mut self.cfg.mic_device, &self.inputs, true) {
                         restart = true;
                         self.dirty = true;
@@ -381,7 +401,7 @@ impl App {
             // ---------------- right column: output ----------------
             ui.allocate_ui_with_layout(Vec2::new(col_w, 0.0), Layout::top_down(Align::Min), |ui| {
                 theme::card(ui, 0.45, |ui| {
-                    theme::section_title(ui, "🔊", "Sortie → Discord", "Le micro virtuel que Discord écoute");
+                    theme::section_title(ui, "➜", "Sortie → Discord", "Le micro virtuel que Discord écoute");
                     if device_combo(ui, "out_dev", &mut self.cfg.output_device, &self.outputs, false) {
                         restart = true;
                         self.dirty = true;
@@ -416,7 +436,7 @@ impl App {
                 ui.add_space(14.0);
                 theme::card(ui, 0.15, |ui| {
                     ui.horizontal(|ui| {
-                        theme::section_title(ui, "🎧", "Retour casque", "Entendre ta guitare en direct");
+                        theme::section_title(ui, "∩", "Retour casque", "Entendre ta guitare en direct");
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if theme::toggle(ui, &mut self.cfg.monitor_enabled).changed() {
                                 restart = true;
@@ -462,7 +482,7 @@ impl App {
 
     fn plugins_tab(&mut self, ui: &mut egui::Ui) {
         theme::card(ui, 0.3, |ui| {
-            theme::section_title(ui, "🧩", "Dossiers VST3", "Dossiers Windows standards + tes dossiers");
+            theme::section_title(ui, "▦", "Dossiers VST3", "Dossiers Windows standards + tes dossiers");
             for d in vst::default_dirs() {
                 ui.label(RichText::new(format!("•  {}", d.display())).size(12.5).color(TEXT_DIM));
             }
@@ -501,7 +521,7 @@ impl App {
         ui.horizontal_top(|ui| {
             ui.allocate_ui_with_layout(Vec2::new(col_w, 0.0), Layout::top_down(Align::Min), |ui| {
                 theme::card(ui, 0.15, |ui| {
-                    theme::section_title(ui, "🔎", &format!("{} plugins trouvés", self.plugins.len()), "Clique pour ajouter à la chaîne guitare");
+                    theme::section_title(ui, "⌕", &format!("{} plugins trouvés", self.plugins.len()), "Clique pour ajouter à la chaîne guitare");
                     ui.add(egui::TextEdit::singleline(&mut self.plugin_filter).hint_text("Rechercher…").desired_width(f32::INFINITY));
                     let f = self.plugin_filter.to_lowercase();
                     let mut add: Option<PathBuf> = None;
@@ -536,7 +556,7 @@ impl App {
             ui.add_space(14.0);
             ui.allocate_ui_with_layout(Vec2::new(col_w, 0.0), Layout::top_down(Align::Min), |ui| {
                 theme::card(ui, 0.4, |ui| {
-                    theme::section_title(ui, "⛓", "Chaîne guitare", "Ordre de traitement, de haut en bas");
+                    theme::section_title(ui, "≡", "Chaîne guitare", "Ordre de traitement, de haut en bas");
                     let mut action: Option<(usize, i32)> = None;
                     for (i, p) in self.cfg.vst_chain.iter().enumerate() {
                         let name = self.plugins.iter().find(|x| &x.path == p).map(|x| x.name.clone()).unwrap_or_else(|| p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
@@ -579,7 +599,7 @@ impl App {
 
     fn help_tab(&mut self, ui: &mut egui::Ui) {
         theme::card(ui, 0.3, |ui| {
-            theme::section_title(ui, "✨", "Mise en route", "3 minutes, une seule fois");
+            theme::section_title(ui, "★", "Mise en route", "3 minutes, une seule fois");
             let steps = [
                 ("1", "Installe VB-Cable (gratuit). Il crée « CABLE Input » (sortie) et « CABLE Output » (entrée)."),
                 ("2", "Optionnel : dans Panneau de configuration › Son › Enregistrement, renomme « CABLE Output » en « Guitar To Discord »."),
@@ -596,7 +616,7 @@ impl App {
         });
         ui.add_space(14.0);
         theme::card(ui, 0.15, |ui| {
-            theme::section_title(ui, "💡", "Astuces", "Pour un son propre");
+            theme::section_title(ui, "!", "Astuces", "Pour un son propre");
             for s in [
                 "ASIO (Focusrite) : la build par défaut utilise WASAPI, qui marche avec toutes les Focusrite. Pour ASIO, compile avec --features asio.",
                 "Latence : règle ta Focusrite et le câble sur la même fréquence (48 kHz) pour éviter tout rééchantillonnage.",

@@ -4,311 +4,449 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Guitar To Discord</title>
-<meta name="description" content="Branche ta guitare dans Discord, en plus de ta voix. App Windows open source en Rust : carte son + micro mixés dans un micro virtuel.">
-<meta name="theme-color" content="#16010a">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23ff4d4d'/><stop offset='1' stop-color='%23c4002a'/></linearGradient></defs><rect width='100' height='100' rx='30' fill='url(%23g)'/><text x='50' y='68' font-size='54' text-anchor='middle'>🎸</text></svg>">
+<meta name="description" content="Ta guitare et ta voix dans Discord, sur un seul micro. App Windows gratuite et open source, écrite en Rust.">
+<meta name="theme-color" content="#FDF1F2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,600;0,700;0,800;0,900;1,800;1,900&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%23FF6B6B'/><stop offset='1' stop-color='%23C8102E'/></linearGradient></defs><path fill='url(%23g)' d='M24 3c10 0 19 4 19 13 0 11-10 26-19 29C15 42 5 27 5 16 5 7 14 3 24 3z'/></svg>">
 <style>
 :root{
-  --red:#ff2442;--hot:#ff4d4d;--deep:#c4002a;--crimson:#78001a;--ink:#0e0206;
-  --text:#fff4f6;--dim:#ffc4cc;--ok:#40e68c;
-  --ease:cubic-bezier(.32,.72,0,1);--bounce:cubic-bezier(.34,1.56,.64,1);
-  color-scheme:dark;
+  --ease:cubic-bezier(.32,.72,0,1);
+  --bounce:linear(0,0.06,0.204,0.389,0.58,0.754,0.897,1.004,1.074,1.113,1.126,1.121,1.104,1.081,1.057,1.034,1.015,1.001,0.992,0.986,0.984,0.985,0.987,0.989,0.992,0.995,0.998,1,1.001,1.002,1.002,1.002,1.002,1.001,1);
+  /* Roamly palette, shifted to red */
+  --bg:#FDF1F2;          /* Roamly #F1F6FC */
+  --ink:#470A14;         /* Roamly #0A2347 */
+  --ink2:#5F2430;        /* Roamly #24405F */
+  --mute:#8A4A55;        /* Roamly #4A6385 */
+  --mute2:#A36B74;       /* Roamly #6B82A3 */
+  --line:#F2D6DA;        /* Roamly #DCE6F2 */
+  --tint:#FCE4E7;        /* Roamly #E3EFFC */
+  --r1:#FF4D5E;          /* Roamly #2272DB */
+  --r2:#C8102E;          /* Roamly #1452AE */
+  --r3:#FF9AA4;          /* Roamly #6BB8F5 */
+  --r4:#FFD1D6;          /* Roamly #BFE6FF */
 }
-*{box-sizing:border-box;margin:0;padding:0}
+*{box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI Variable Display","Segoe UI",Inter,system-ui,sans-serif;
-  background:linear-gradient(180deg,#26020a 0%,#140106 55%,var(--ink) 100%) fixed;
-  color:var(--text);overflow-x:hidden;-webkit-font-smoothing:antialiased;line-height:1.5;
-}
-a{color:inherit;text-decoration:none}
+body{margin:0;font-family:'Nunito',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:var(--r1)}a:hover{color:var(--r2)}
+button{font-family:'Nunito',sans-serif;cursor:pointer;border:0;color:inherit;transition:scale .5s var(--bounce),background .25s var(--ease),box-shadow .35s var(--ease),color .2s,filter .25s,opacity .3s}
+button:active,.btn:active,.gw:active,.gl:active{scale:.95;transition-duration:.12s}
+svg{display:block}
 
-/* ---------- animated liquid backdrop ---------- */
-.bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
-.blob{position:absolute;border-radius:50%;filter:blur(70px);opacity:.75;mix-blend-mode:screen;will-change:transform}
-.b1{width:62vmax;height:62vmax;left:-18vmax;top:-22vmax;background:radial-gradient(circle,var(--red) 0%,transparent 65%);animation:d1 22s ease-in-out infinite alternate}
-.b2{width:52vmax;height:52vmax;right:-16vmax;top:8vh;background:radial-gradient(circle,var(--deep) 0%,transparent 65%);animation:d2 26s ease-in-out infinite alternate}
-.b3{width:58vmax;height:58vmax;left:20vw;bottom:-36vmax;background:radial-gradient(circle,var(--hot) 0%,transparent 62%);opacity:.5;animation:d3 30s ease-in-out infinite alternate}
-.b4{width:30vmax;height:30vmax;left:-8vmax;bottom:6vh;background:radial-gradient(circle,var(--crimson) 0%,transparent 65%);animation:d2 18s ease-in-out infinite alternate-reverse}
-@keyframes d1{to{transform:translate(12vw,10vh) scale(1.12)}}
-@keyframes d2{to{transform:translate(-10vw,14vh) scale(.9)}}
-@keyframes d3{to{transform:translate(-14vw,-8vh) scale(1.15)}}
-.grain{position:absolute;inset:0;opacity:.07;background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+/* ---------- glass, 1:1 with Roamly charter.css ---------- */
+.gl{position:relative;isolation:isolate;
+  background:radial-gradient(ellipse 45% 35% at 25% 30%,rgba(255,255,255,.13) 0%,transparent 60%),radial-gradient(ellipse 40% 45% at 75% 70%,rgba(255,255,255,.08) 0%,transparent 60%),radial-gradient(ellipse 30% 25% at 50% 40%,rgba(255,255,255,.06) 0%,transparent 50%),radial-gradient(ellipse 20% 30% at 70% 60%,rgba(255,200,208,.07) 0%,transparent 50%),radial-gradient(ellipse at 50% 150%,rgba(255,120,135,.32) 0%,transparent 70%),rgba(80,8,20,.56);
+  -webkit-backdrop-filter:blur(18px) saturate(150%);backdrop-filter:blur(18px) saturate(150%);
+  box-shadow:0 1px 2px rgba(0,0,0,.3),0 2px 6px 2px rgba(0,0,0,.15),0 24px 48px rgba(80,8,20,.22),inset 0 1px 2px rgba(255,255,255,.18),inset 0 -8px 20px rgba(0,0,0,.15);color:#FFFFFF}
+.gl::before{content:"";position:absolute;top:0;left:10%;right:10%;height:1px;pointer-events:none;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.35) 20%,rgba(255,255,255,.6) 50%,rgba(255,255,255,.35) 80%,transparent 100%)}
+.gl::after,.gw::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;pointer-events:none;background:conic-gradient(from 45deg,rgba(0,0,0,.08),rgba(255,255,255,.5),rgba(0,0,0,.1),rgba(255,255,255,.55),rgba(0,0,0,.08));-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.gw{position:relative;isolation:isolate;
+  background:radial-gradient(ellipse 50% 40% at 20% 0%,rgba(255,255,255,.95) 0%,transparent 70%),radial-gradient(ellipse 40% 45% at 80% 80%,rgba(255,215,220,.35) 0%,transparent 60%),rgba(255,255,255,.74);
+  -webkit-backdrop-filter:blur(20px) saturate(160%);backdrop-filter:blur(20px) saturate(160%);
+  box-shadow:0 1px 2px rgba(71,10,20,.12),0 2px 6px 2px rgba(71,10,20,.06),0 20px 40px rgba(71,10,20,.14),inset 0 1px 2px #FFFFFF,inset 0 -8px 20px rgba(219,34,60,.1);color:var(--ink)}
+.gw::before{content:"";position:absolute;top:0;left:10%;right:10%;height:1px;pointer-events:none;background:linear-gradient(90deg,transparent,#FFFFFF 50%,transparent)}
+.btn{background:linear-gradient(180deg,var(--r1) 0%,var(--r2) 100%);box-shadow:0 8px 20px rgba(200,16,46,.35),inset 0 1px 1px rgba(255,255,255,.45),inset 0 -2px 6px rgba(0,0,0,.15);color:#FFFFFF}
+.btn:hover{filter:brightness(1.1)}
+/* key button (pxb) */
+.pxb{position:relative;overflow:hidden;isolation:isolate;height:54px;padding:0 24px;border-radius:18px;font-weight:800;font-size:16px;display:inline-flex;align-items:center;justify-content:center;min-width:230px;text-decoration:none}
+.pxb-k{position:absolute;z-index:1;top:4px;bottom:4px;left:4px;width:46px;border-radius:13px;display:flex;align-items:center;justify-content:flex-end;padding-right:12px;color:var(--r2);background:linear-gradient(180deg,#FFFFFF 0%,var(--tint) 100%);box-shadow:0 2px 6px rgba(71,10,20,.22),inset 0 1px 0 #FFFFFF;transition:width .6s var(--bounce)}
+.pxb-k>svg{width:22px;height:22px;transition:rotate .7s var(--bounce)}
+.pxb-t{position:relative;z-index:2;display:block;width:100%;padding-left:44px;text-align:center;white-space:nowrap;transition:padding .45s var(--ease),color .25s}
+.pxb:hover{color:#fff}.pxb:hover .pxb-k{width:calc(100% - 8px)}.pxb:hover .pxb-k>svg{rotate:360deg}
+.pxb:hover .pxb-t{padding-left:0;padding-right:44px;color:var(--r2)}
+.ghost{height:54px;padding:0 22px;border-radius:18px;font-weight:800;font-size:16px;display:inline-flex;align-items:center;text-decoration:none;color:var(--ink)}
+.ghost:hover{color:var(--ink)}
 
-/* ---------- liquid glass (Roamly navbar recipe, in red) ---------- */
-.glass{
-  position:relative;isolation:isolate;
+.h2,.gtt{background:linear-gradient(180deg,var(--r3) 0%,var(--r1) 75%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.h2{margin:0;font-weight:900;font-style:italic;font-size:clamp(34px,4.6vw,50px);letter-spacing:-.03em;line-height:1.04;padding-right:.08em}
+.kick{font-weight:900;font-size:14px;letter-spacing:.14em;color:var(--r1)}
+.lbl{font-weight:900;font-size:12px;color:var(--mute);letter-spacing:.08em}
+
+@keyframes vapor{0%{opacity:0;filter:blur(20px);transform:translateY(20px) scale(1.5) rotate(5deg)}55%{opacity:1}100%{opacity:1;filter:blur(0);transform:none}}
+@keyframes popIn{from{opacity:0;translate:0 10px;scale:.9}to{opacity:1;translate:0 0;scale:1}}
+@keyframes rise{from{opacity:0;translate:0 28px;scale:.97}to{opacity:1;translate:0 0;scale:1}}
+@keyframes floaty{0%,100%{translate:0 0}50%{translate:0 -12px}}
+@keyframes bob{0%,100%{translate:0 0}50%{translate:0 -8px}}
+.vl{display:inline-block;transform-origin:bottom;animation:vapor 1.4s cubic-bezier(.16,1,.3,1) both}
+.pop{animation:popIn .6s var(--bounce) both}
+.float{animation:floaty 6s ease-in-out infinite}
+.bob{animation:bob 4s ease-in-out infinite}
+.rv{opacity:0}.rv.in{animation:rise .9s var(--ease) both;animation-delay:calc(var(--i,0)*80ms)}
+
+/* ---------- header ---------- */
+header.top{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:20px 48px;transition:padding .5s var(--ease)}
+header.top.sc{padding:12px 48px}
+.logo{display:flex;align-items:center;gap:8px;font-weight:900;font-size:22px;letter-spacing:-.02em;color:#fff;text-decoration:none;width:260px;text-shadow:0 1px 10px rgba(80,8,20,.35);transition:color .4s}
+header.top.sc .logo{color:var(--ink);text-shadow:none}
+.logo:hover{color:inherit}
+nav.pill{border-radius:99px;height:52px;padding:0 6px;display:flex;align-items:center;background-color:rgba(40,4,10,.55)}
+.nvpill{position:absolute;top:6px;height:40px;border-radius:99px;background:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.2);transition:left .6s var(--bounce),width .6s var(--bounce)}
+.nvb{position:relative;z-index:1;height:40px;padding:0 11px;background:transparent;border-radius:99px;display:flex;align-items:center;color:rgba(255,255,255,.62);text-decoration:none}
+.nvb:hover,.nvb.on{color:#fff}
+.nvl{display:block;overflow:hidden;white-space:nowrap;font-weight:800;font-size:14px;max-width:0;margin-left:0;opacity:0;transition:max-width .48s cubic-bezier(.2,.9,.25,1),margin .48s cubic-bezier(.2,.9,.25,1),opacity .3s}
+.nvb.on .nvl{max-width:160px;margin-left:8px;opacity:1}
+.hright{width:260px;display:flex;justify-content:flex-end}
+.hright .gl{height:48px;padding:0 18px;border-radius:16px;font-weight:800;font-size:15px;display:flex;align-items:center;gap:8px;text-decoration:none;color:#fff}
+@media (max-width:860px){header.top{padding:14px 16px}.logo{width:auto;font-size:0}.logo svg{width:34px;height:34px}.hright{width:auto}.hright .gl span{display:none}}
+
+/* ---------- hero (Roamly .sky, red stage) ---------- */
+.sky{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 24px 70px;overflow:hidden;
   background:
-    linear-gradient(135deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,.07) 38%,rgba(255,255,255,.03) 62%,rgba(255,255,255,.13) 100%),
-    rgba(120,0,26,.30);
-  -webkit-backdrop-filter:blur(14px) saturate(190%) brightness(1.06);
-  backdrop-filter:blur(14px) saturate(190%) brightness(1.06);
-  box-shadow:
-    inset 1.5px 1.5px 0 rgba(255,255,255,.55),
-    inset -1px -1px 0 rgba(255,255,255,.18),
-    inset 0 0 30px rgba(255,255,255,.10),
-    0 14px 44px rgba(40,0,10,.45),
-    0 2px 6px rgba(40,0,10,.3);
+    linear-gradient(180deg,rgba(90,6,20,.70) 0%,rgba(219,34,60,.22) 40%,rgba(253,241,242,.78) 66%,var(--bg) 84%),
+    radial-gradient(ellipse 90% 60% at 50% 18%,#FF6A6A 0%,#E01F3A 38%,#7A0A1C 78%);
 }
-.glass::after{ /* specular highlight that follows the pointer */
-  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
-  background:radial-gradient(260px circle at var(--mx,30%) var(--my,0%),rgba(255,255,255,.22),transparent 60%);
-  opacity:var(--hl,.55);transition:opacity .4s var(--ease);
-}
-
-/* ---------- nav ---------- */
-.nav{
-  position:fixed;left:50%;top:18px;z-index:50;translate:-50% 0;
-  width:min(1080px,calc(100% - 32px));height:64px;border-radius:32px;
-  display:flex;align-items:center;gap:14px;padding:0 10px 0 14px;
-  transition:height .5s var(--ease),top .5s var(--ease),width .5s var(--ease);
-}
-.nav.small{height:54px;top:10px;width:min(880px,calc(100% - 24px))}
-.logo{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-size:20px;
-  background:linear-gradient(135deg,var(--hot),var(--deep));box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 6px 16px rgba(255,36,66,.45)}
-.brand{font-weight:800;letter-spacing:-.01em;font-size:17px}
-.nav .links{display:flex;gap:4px;margin-left:auto}
-.nav .links a{padding:9px 14px;border-radius:20px;font-size:14px;font-weight:600;color:var(--dim);transition:background .25s,color .25s}
-.nav .links a:hover{background:rgba(255,255,255,.1);color:var(--text)}
-@media (max-width:760px){.nav .links a:not(.btn){display:none}}
-
-.btn{
-  display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 22px;border-radius:22px;
-  font-weight:700;font-size:15px;color:var(--text);position:relative;overflow:hidden;
-  background:linear-gradient(120deg,var(--hot) 0%,var(--red) 55%,var(--deep) 100%);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 10px 28px rgba(255,36,66,.45);
-  transition:transform .35s var(--bounce),box-shadow .35s var(--ease);
-}
-.btn::before{content:"";position:absolute;left:8px;right:8px;top:2px;height:50%;border-radius:20px 20px 12px 12px;
-  background:linear-gradient(180deg,rgba(255,255,255,.38),transparent)}
-.btn:hover{transform:translateY(-2px) scale(1.03);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 16px 38px rgba(255,36,66,.6)}
-.btn:active{transform:scale(.97)}
-.btn.ghost{background:rgba(255,255,255,.08);box-shadow:inset 1.5px 1.5px 0 rgba(255,255,255,.45),inset -1px -1px 0 rgba(255,255,255,.15),0 10px 28px rgba(0,0,0,.3)}
-.btn.ghost::before{opacity:.5}
-.nav .btn{height:42px;padding:0 18px;font-size:14px}
-
-/* ---------- hero ---------- */
-main{width:min(1080px,calc(100% - 32px));margin:0 auto}
-.hero{min-height:100vh;display:grid;place-items:center;text-align:center;padding:140px 0 80px}
-.pill{display:inline-flex;align-items:center;gap:8px;padding:7px 14px 7px 10px;border-radius:20px;font-size:13px;font-weight:600;color:var(--dim)}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(64,230,140,.6);animation:pulse 1.8s infinite}
-@keyframes pulse{70%{box-shadow:0 0 0 10px rgba(64,230,140,0)}100%{box-shadow:0 0 0 0 rgba(64,230,140,0)}}
-h1{font-size:clamp(44px,8.4vw,104px);line-height:.98;letter-spacing:-.045em;font-weight:800;margin:22px 0 20px}
-.grad{background:linear-gradient(100deg,#fff 0%,#ffd0d6 30%,var(--hot) 58%,var(--red) 78%,#ff8a8a 100%);background-size:200% 100%;
-  -webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 8s ease-in-out infinite alternate}
-@keyframes shine{to{background-position:100% 0}}
-.lead{font-size:clamp(17px,2vw,21px);color:var(--dim);max-width:640px;margin:0 auto 34px}
-.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.small-note{margin-top:16px;font-size:13px;color:rgba(255,196,204,.7)}
-
-/* ---------- app mockup ---------- */
-.mock{margin:70px auto 0;width:min(860px,100%);border-radius:30px;padding:18px;text-align:left;transform:perspective(1400px) rotateX(10deg);transition:transform 1.2s var(--ease)}
-.mock.in{transform:perspective(1400px) rotateX(0)}
-.mbar{height:54px;border-radius:27px;display:flex;align-items:center;gap:12px;padding:0 8px 0 10px;margin-bottom:14px}
-.mbar .logo{width:34px;height:34px;font-size:16px;border-radius:11px}
-.mbar b{font-size:15px}.mbar small{display:block;font-size:11px;color:var(--dim);font-weight:500}
-.mbar .live{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--ok)}
-.mbar .btn{height:38px;font-size:13px;padding:0 18px}
-.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media (max-width:640px){.mgrid{grid-template-columns:1fr}}
-.mcard{border-radius:22px;padding:16px}
-.mcard h4{display:flex;align-items:center;gap:10px;font-size:15px;margin-bottom:12px}
-.ic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;font-size:15px;background:linear-gradient(180deg,var(--hot),var(--deep))}
-.sel{height:34px;border-radius:12px;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);display:flex;align-items:center;padding:0 12px;font-size:12.5px;margin-bottom:10px;justify-content:space-between}
-.meter{height:8px;display:flex;gap:2px;margin:10px 0 12px}
-.meter i{flex:1;border-radius:2px;background:rgba(255,255,255,.06);transition:background .08s}
-.slider{font-size:11.5px;color:var(--dim);display:flex;justify-content:space-between;margin-bottom:6px}
-.track{height:10px;border-radius:5px;background:rgba(0,0,0,.32);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);position:relative}
-.track span{position:absolute;inset:0 auto 0 0;border-radius:5px;background:linear-gradient(90deg,var(--deep),var(--hot))}
-.track span::after{content:"";position:absolute;right:-10px;top:50%;width:20px;height:20px;margin-top:-10px;border-radius:50%;background:#fff;box-shadow:0 3px 10px rgba(255,36,66,.55)}
+.beam{position:absolute;top:-10%;width:34vw;height:120%;transform-origin:50% 0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,240,242,.55),rgba(255,210,216,.16) 45%,transparent 75%);filter:blur(18px);mix-blend-mode:screen;animation:sweep 9s ease-in-out infinite alternate}
+.beam.b1{left:2%;rotate:-22deg}.beam.b2{left:33%;rotate:4deg;animation-duration:11s;animation-delay:-3s;opacity:.8}.beam.b3{right:2%;rotate:24deg;animation-delay:-6s}
+@keyframes sweep{0%{transform:rotate(-7deg)}100%{transform:rotate(7deg)}}
+.haze{position:absolute;left:-10%;right:-10%;bottom:8%;height:50%;pointer-events:none;
+  background:radial-gradient(ellipse 30% 55% at 18% 60%,#fff,transparent 70%),radial-gradient(ellipse 40% 65% at 52% 68%,#fff,transparent 72%),radial-gradient(ellipse 30% 55% at 84% 62%,#fff,transparent 70%);filter:blur(24px);animation:drift 16s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translateX(4%)}}
+.stage-guitar{position:absolute;top:11vh;left:50%;width:min(820px,94vw);margin-left:calc(min(820px,94vw) / -2);filter:drop-shadow(0 40px 40px rgba(60,4,14,.45));animation:floaty 7s ease-in-out infinite}
+.hero-copy{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+h1{margin:0;font-weight:900;font-style:italic;font-size:clamp(46px,7.2vw,92px);letter-spacing:-.035em;line-height:1.02}
+h1 .w{display:inline-block;margin-right:.26em;filter:drop-shadow(0 4px 18px rgba(80,8,20,.28))}
+h1 .vl{background:linear-gradient(180deg,#FF8A95 0%,var(--r1) 55%,var(--r2) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;padding-right:.04em;margin-right:-.04em}
+h1 .w:last-child{margin-right:0}
+.hero-copy p{margin:0;font-weight:800;font-size:20px;color:var(--ink2);text-shadow:0 1px 12px rgba(255,255,255,.9)}
+.ctas{display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;justify-content:center}
 
 /* ---------- sections ---------- */
-section{padding:110px 0 20px}
-.eyebrow{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--hot)}
-h2{font-size:clamp(32px,5vw,56px);letter-spacing:-.035em;line-height:1.04;margin:10px 0 16px;font-weight:800}
-.sub{color:var(--dim);font-size:18px;max-width:640px}
+main{max-width:1312px;margin:0 auto;padding:0 24px}
+section{padding:80px 0 20px;display:flex;flex-direction:column;align-items:center;gap:30px}
+.center{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.sub{font-weight:700;font-size:17px;color:var(--mute);margin:0}
 
-.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:14px;margin-top:46px}
-.node{border-radius:26px;padding:26px 22px;text-align:center}
-.node .big{font-size:40px;display:block;margin-bottom:8px}
-.node b{display:block;font-size:18px}.node span{color:var(--dim);font-size:14px}
-.wire{width:70px;height:4px;border-radius:2px;background:rgba(255,255,255,.12);position:relative;overflow:hidden}
-.wire::after{content:"";position:absolute;inset:0;width:40%;border-radius:2px;background:linear-gradient(90deg,transparent,var(--hot),#fff);animation:flow 1.4s linear infinite}
-@keyframes flow{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
-@media (max-width:760px){.flow{grid-template-columns:1fr}.wire{width:4px;height:44px;margin:0 auto}.wire::after{width:100%;height:40%;background:linear-gradient(180deg,transparent,var(--hot),#fff);animation:flowv 1.4s linear infinite}}
-@keyframes flowv{from{transform:translateY(-100%)}to{transform:translateY(260%)}}
+/* backstage pass (Roamly boarding pass) */
+.pass{width:100%;display:grid;grid-template-columns:1fr 260px;border-radius:30px;background:#fff;box-shadow:0 1px 2px rgba(71,10,20,.08),0 30px 60px rgba(71,10,20,.12);position:relative}
+.pass .main{padding:30px 34px;display:grid;grid-template-columns:auto 1fr auto;gap:18px 28px;align-items:center}
+.pass .stub{padding:30px 26px;border-left:2px dashed var(--line);position:relative;background:linear-gradient(180deg,#FFFDFD,#FFF6F7);border-radius:0 30px 30px 0;display:flex;flex-direction:column;gap:16px}
+.pass .stub::before,.pass .stub::after{content:"";position:absolute;left:-13px;width:24px;height:24px;border-radius:50%;background:var(--bg);box-shadow:inset 0 2px 3px rgba(71,10,20,.08)}
+.pass .stub::before{top:-12px}.pass .stub::after{bottom:-12px}
+.phead{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between}
+.phead .brand{display:flex;align-items:center;gap:8px;font-weight:900;font-size:16px}
+.phead .lbl{margin-left:16px}
+.code{font-weight:900;font-size:clamp(56px,7vw,88px);letter-spacing:-.04em;line-height:.9;background:linear-gradient(180deg,var(--r1),var(--r2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.place{font-weight:800;font-size:16px;margin-top:6px}
+.route{display:flex;align-items:center;gap:0;min-width:220px}
+.route .dot{display:block;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 0 0 5px rgba(255,77,94,.18),inset 0 0 0 5px var(--r1);flex-shrink:0}
+.route .wire{flex:1;height:3px;margin:0 4px;background:repeating-linear-gradient(90deg,var(--r3) 0 8px,transparent 8px 14px);position:relative}
+.route .wire i{position:absolute;top:-5px;left:0;width:34px;height:13px;border-radius:7px;background:linear-gradient(90deg,transparent,var(--r1));filter:blur(1px);animation:signal 1.6s linear infinite}
+@keyframes signal{from{left:-10%}to{left:95%}}
+.route small{display:block;font-weight:900;font-size:10.5px;letter-spacing:.08em;color:var(--mute2);margin-top:8px}
+.fields{display:flex;gap:32px;flex-wrap:wrap}
+.fields b{display:block;font-weight:900;font-size:19px;margin-top:4px}
+.fields .big{color:var(--r1)}
+.tags{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.tag{height:38px;padding:0 14px 0 8px;border-radius:99px;display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:14px;background:#fff;border:1.5px solid var(--line);transition:border-color .25s,box-shadow .25s}
+.tag.on{border-color:var(--r1);box-shadow:0 4px 12px rgba(255,77,94,.18)}
+.tag svg{width:22px;height:22px}
+.stub .row{display:flex;gap:18px}
+.stub .row b{display:block;font-weight:900;font-size:18px}
+.barcode{height:44px;background:repeating-linear-gradient(90deg,var(--ink) 0 2px,transparent 2px 4px,var(--ink) 4px 7px,transparent 7px 9px,var(--ink) 9px 10px,transparent 10px 13px);border-radius:2px;position:relative;overflow:hidden}
+.barcode::after{content:"";position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,77,94,.55),transparent);animation:scan 2.6s ease-in-out infinite}
+@keyframes scan{from{left:-40%}to{left:100%}}
+.stub p{margin:0;font-weight:700;font-size:13px;color:var(--mute)}
+.stub .pxb{min-width:0;width:100%;height:50px;font-size:15px}
+@media (max-width:900px){.pass{grid-template-columns:1fr}.pass .main{grid-template-columns:1fr}.pass .stub{border-left:0;border-top:2px dashed var(--line);border-radius:0 0 30px 30px}.pass .stub::before,.pass .stub::after{display:none}}
 
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:44px}
-@media (max-width:860px){.grid3{grid-template-columns:1fr}}
-.feat{border-radius:26px;padding:26px;transition:transform .5s var(--bounce)}
-.feat:hover{transform:translateY(-6px)}
-.feat .ic{width:44px;height:44px;border-radius:14px;font-size:21px;margin-bottom:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 8px 20px rgba(255,36,66,.4)}
-.feat h3{font-size:19px;letter-spacing:-.01em;margin-bottom:6px}
-.feat p{color:var(--dim);font-size:15px}
-.tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;background:rgba(255,255,255,.12);margin-left:6px;vertical-align:middle;color:var(--text)}
+/* bento (dark wine glass, like Roamly .rcard / pricing) */
+.bento-grid{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:280px;gap:18px}
+.bento{position:relative;border-radius:28px;overflow:hidden;padding:26px;display:flex;flex-direction:column;justify-content:flex-end;color:#fff;
+  background:radial-gradient(circle 300px at 0% 0%,rgba(255,255,255,.26),transparent 70%),radial-gradient(ellipse 70% 60% at 100% 100%,rgba(255,110,125,.45),transparent 70%),linear-gradient(160deg,#B3122A 0%,#6E0716 70%,#4A0410 100%);
+  box-shadow:0 18px 40px rgba(71,10,20,.18),inset 1.5px 1.5px 0 rgba(255,255,255,.35),inset 0 0 30px rgba(255,255,255,.08);
+  transition:translate .6s var(--ease),scale .6s var(--bounce),box-shadow .6s}
+.bento:hover{translate:0 -6px;scale:1.03;z-index:3;box-shadow:0 34px 60px rgba(71,10,20,.32)}
+.bento.wide{grid-column:span 2}
+.bento.light{background:radial-gradient(ellipse 50% 40% at 20% 0%,#fff 0%,transparent 70%),linear-gradient(160deg,#FFFFFF,#FFE9EC);color:var(--ink);box-shadow:0 18px 40px rgba(71,10,20,.12),inset 0 1px 2px #fff}
+.bento h3{margin:0 0 4px;font-weight:900;font-size:22px;letter-spacing:-.01em}
+.bento p{margin:0;font-weight:700;font-size:14.5px;opacity:.85}
+.bento .art{position:absolute;top:22px;right:22px;width:120px;height:120px;opacity:.95}
+.bento.wide .art{width:auto;height:auto;left:26px;right:26px;top:26px}
+.meters{display:flex;gap:4px;align-items:flex-end;height:120px}
+.meters i{flex:1;border-radius:4px;background:linear-gradient(180deg,#fff,var(--r3));opacity:.9;transition:height .12s}
+@media (max-width:860px){.bento-grid{grid-template-columns:1fr}.bento.wide{grid-column:auto}}
 
-.steps{display:grid;gap:14px;margin-top:40px;counter-reset:s}
-.step{border-radius:24px;padding:22px 24px 22px 84px;position:relative;min-height:78px}
-.step::before{counter-increment:s;content:counter(s);position:absolute;left:22px;top:20px;width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-weight:800;font-size:18px;
-  background:linear-gradient(180deg,var(--hot),var(--deep));box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 8px 18px rgba(255,36,66,.4)}
-.step b{display:block;font-size:17px}.step span{color:var(--dim)}
-code{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:.9em;background:rgba(0,0,0,.3);padding:2px 7px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+/* plans (Roamly pricing, dark) */
+.plans{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;align-items:center}
+.plan{border-radius:28px;padding:26px;color:#fff;position:relative;overflow:hidden;display:flex;flex-direction:column;gap:14px;
+  background:radial-gradient(circle 260px at 0% 0%,rgba(255,255,255,.18),transparent 70%),repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0 1px,transparent 1px 14px),linear-gradient(180deg,#5A0815,#2B030A);
+  box-shadow:0 24px 50px rgba(71,10,20,.3),inset 1.5px 1.5px 0 rgba(255,255,255,.25)}
+.plan.mid{padding:34px 28px;background:radial-gradient(circle 300px at 0% 0%,rgba(255,255,255,.22),transparent 70%),repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 1px,transparent 1px 14px),linear-gradient(180deg,#8E0B20,#3E040E);box-shadow:0 34px 70px rgba(200,16,46,.35),inset 1.5px 1.5px 0 rgba(255,255,255,.3)}
+.plan.gold{box-shadow:0 24px 50px rgba(71,10,20,.3),inset 0 0 0 1.5px rgba(255,190,140,.55)}
+.plan .tt{font-weight:900;font-style:italic;font-size:26px}
+.plan .ds{font-weight:700;font-size:14px;opacity:.78;margin-top:-8px}
+.plan .pr{font-weight:900;font-size:48px;letter-spacing:-.03em;line-height:1}.plan .pr small{font-size:15px;font-weight:800;opacity:.8;letter-spacing:0}
+.plan .pb{height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;text-decoration:none;color:#fff;background:rgba(255,255,255,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+.plan .pb.btn{background:linear-gradient(180deg,var(--r1),var(--r2))}
+.plan .pb:hover{color:#fff;filter:brightness(1.12)}
+.plan ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.plan li{display:flex;gap:10px;align-items:center;font-weight:700;font-size:14.5px}
+.plan li svg{width:18px;height:18px;flex-shrink:0}
+.plan .sep{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:900;letter-spacing:.1em;opacity:.6}
+.plan .sep::before,.plan .sep::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.25)}
+@media (max-width:900px){.plans{grid-template-columns:1fr}}
 
-.faq{margin-top:36px;display:grid;gap:12px}
-details{border-radius:22px;padding:0 22px;transition:background .3s}
-summary{list-style:none;cursor:pointer;padding:20px 0;font-weight:700;font-size:17px;display:flex;justify-content:space-between;align-items:center}
-summary::-webkit-details-marker{display:none}
-summary::after{content:"+";font-size:24px;font-weight:400;transition:transform .4s var(--bounce);color:var(--hot)}
-details[open] summary::after{transform:rotate(45deg)}
-details p{color:var(--dim);padding:0 0 20px;max-width:780px}
+/* FAQ */
+.faqwrap{width:100%;display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:40px;align-items:flex-start}
+.faq{border-radius:28px;padding:10px;display:flex;flex-direction:column;gap:4px}
+.qa{border-radius:18px;transition:background .3s,box-shadow .3s}
+.qa.open{background:#fff;box-shadow:0 8px 24px rgba(71,10,20,.1)}
+.qa button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;background:transparent;text-align:left;border-radius:14px}
+.qa button span{display:flex;align-items:center;gap:12px;font-size:15px;font-weight:700}
+.qa.open button span{font-weight:900}
+.qa .ic{width:28px;height:28px;flex-shrink:0}
+.qa .chev{width:16px;height:16px;color:var(--mute2);transition:transform .55s var(--bounce)}
+.qa.open .chev{transform:rotate(180deg);color:var(--r1)}
+.qa .ans{max-height:0;opacity:0;overflow:hidden;transition:max-height .45s cubic-bezier(.2,.9,.25,1),opacity .3s .05s}
+.qa.open .ans{opacity:1}
+.qa p{margin:0;padding:2px 20px 14px 56px;font-size:14px;font-weight:600;line-height:1.55;color:var(--mute)}
+.mascot{width:min(360px,80%);margin-top:30px;filter:drop-shadow(0 28px 30px rgba(120,10,30,.25))}
+@media (max-width:900px){.faqwrap{grid-template-columns:1fr}}
 
-.final{margin:110px 0 40px;border-radius:36px;padding:64px 28px;text-align:center}
-footer{text-align:center;color:rgba(255,196,204,.6);font-size:13px;padding:30px 0 50px}
-footer a{color:var(--dim);text-decoration:underline;text-underline-offset:3px}
-
-/* ---------- reveal ---------- */
-.rv{opacity:0;transform:translateY(34px) scale(.98);filter:blur(6px);transition:opacity 1s var(--ease),transform 1s var(--ease),filter 1s var(--ease)}
-.rv.in{opacity:1;transform:none;filter:none}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.rv{opacity:1;transform:none;filter:none}.mock{transform:none}}
+.final{padding:90px 0 60px}
+.final p{margin:0;font-weight:700;font-size:17px;color:var(--mute)}
+footer{max-width:1360px;margin:20px auto 30px;border-radius:34px;padding:34px 34px 22px}
+footer .cols{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:24px}
+footer h4{margin:0 0 10px;font-weight:900;font-style:italic;font-size:15px;color:var(--r2)}
+footer a.fl{display:block;color:var(--ink2);text-decoration:none;font-weight:700;font-size:14px;padding:4px 0}
+footer a.fl:hover{color:var(--r1)}
+footer .bot{display:flex;justify-content:space-between;margin-top:22px;padding-top:16px;border-top:1px solid var(--line);font-weight:700;font-size:13px;color:var(--mute2)}
+@media (max-width:760px){footer .cols{grid-template-columns:1fr 1fr}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.rv{opacity:1}}
 </style>
 </head>
 <body>
-<div class="bg" aria-hidden="true"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div><div class="grain"></div></div>
 
-<nav class="nav glass" id="nav">
-  <div class="logo">🎸</div>
-  <span class="brand">Guitar To Discord</span>
-  <div class="links">
-    <a href="#comment">Comment ça marche</a>
-    <a href="#features">Fonctions</a>
-    <a href="#install">Installation</a>
-    <a href="#faq">FAQ</a>
-    <a class="btn" href="https://github.com/VeqtaDev/GuitarToDiscord/releases/latest">Télécharger</a>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF7A86"/><stop offset="1" stop-color="#C8102E"/></linearGradient>
+    <linearGradient id="lgw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FFD1D6"/></linearGradient>
+    <!-- duotone icons, Roamly style (filled + 45% layer) -->
+    <symbol id="i-home" viewBox="0 0 48 48"><path fill="currentColor" fill-rule="evenodd" d="M20.6 2.8c2.2-1 4.7-1 6.9 0 7.8 3.6 13.6 8.6 16.3 11.4 1.5 1.5 2.3 3.5 2.4 5.5.1 2.5.3 6.6.3 11.2 0 3.2-.1 6.2-.2 8.6-.2 3.8-3.2 6.7-6.9 6.9-3.5.1-8.6.2-15.4.2s-11.9-.1-15.4-.2c-3.8-.1-6.8-3.1-6.9-6.9C1.6 37.1 1.5 34.1 1.5 30.8c0-4.6.2-8.7.3-11.2.1-2 .9-4 2.4-5.5C7 11.5 12.8 6.4 20.6 2.8ZM16 36a2 2 0 0 0 0 4h16a2 2 0 0 0 0-4H16Z"/></symbol>
+    <symbol id="i-pass" viewBox="0 0 24 24"><path fill="currentColor" opacity=".45" d="M3 7a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v2a3 3 0 0 0 0 6v2a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-2a3 3 0 0 0 0-6V7Z"/><path fill="currentColor" d="M14 4h1.5v16H14z"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path fill="currentColor" opacity=".45" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Z"/><path fill="currentColor" d="M13.2 5.5 7.8 13h3.6l-.8 5.5 5.6-7.6h-3.7l.7-5.4Z"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path fill="currentColor" opacity=".45" d="M12 3c5 0 9 3.4 9 7.6s-4 7.6-9 7.6c-.9 0-1.8-.1-2.6-.3L5 20l.9-3.6C4.1 15 3 13 3 10.6 3 6.4 7 3 12 3Z"/><circle fill="currentColor" cx="8.2" cy="10.6" r="1.4"/><circle fill="currentColor" cx="12" cy="10.6" r="1.4"/><circle fill="currentColor" cx="15.8" cy="10.6" r="1.4"/></symbol>
+    <symbol id="i-gh" viewBox="0 0 24 24"><path fill="currentColor" d="M12 1.5a10.5 10.5 0 0 0-3.3 20.5c.5.1.7-.2.7-.5v-1.8c-2.9.6-3.5-1.4-3.5-1.4-.5-1.2-1.2-1.5-1.2-1.5-.9-.7.1-.6.1-.6 1 .1 1.6 1.1 1.6 1.1.9 1.6 2.5 1.2 3.1.9.1-.7.4-1.2.7-1.4-2.3-.3-4.8-1.2-4.8-5.2 0-1.1.4-2.1 1.1-2.8-.1-.3-.5-1.4.1-2.8 0 0 .9-.3 2.9 1.1a10 10 0 0 1 5.3 0c2-1.4 2.9-1.1 2.9-1.1.6 1.5.2 2.5.1 2.8.7.7 1.1 1.7 1.1 2.8 0 4-2.5 4.9-4.8 5.2.4.3.7 1 .7 1.9v2.9c0 .3.2.6.7.5A10.5 10.5 0 0 0 12 1.5Z"/></symbol>
+    <symbol id="i-dl" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="rgba(255,209,214,.18)"/><path d="m7.5 12.5 3 3 6-6.5" fill="none" stroke="#FFD1D6" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-pick" viewBox="0 0 48 48"><path d="M24 3c10 0 19 4 19 13 0 11-10 26-19 29C15 42 5 27 5 16 5 7 14 3 24 3z"/></symbol>
+  </defs>
+</svg>
+
+<header class="top" id="top">
+  <a class="logo" href="#accueil"><svg width="30" height="30" viewBox="0 0 48 48"><use href="#i-pick" fill="url(#lg)"/><path d="M17 17c3-3 11-3 14 0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" opacity=".9"/></svg>guitartodiscord</a>
+  <nav class="pill gl" id="nav" aria-label="Navigation principale">
+    <span class="nvpill" id="nvpill"></span>
+    <a class="nvb on" href="#accueil"><svg width="20" height="20"><use href="#i-home"/></svg><span class="nvl">Accueil</span></a>
+    <a class="nvb" href="#pass"><svg width="20" height="20"><use href="#i-pass"/></svg><span class="nvl">Installation</span></a>
+    <a class="nvb" href="#son"><svg width="20" height="20"><use href="#i-bolt"/></svg><span class="nvl">Fonctions</span></a>
+    <a class="nvb" href="#questions"><svg width="20" height="20"><use href="#i-chat"/></svg><span class="nvl">Questions</span></a>
+  </nav>
+  <div class="hright"><a class="gl" href="https://github.com/VeqtaDev/GuitarToDiscord"><svg width="18" height="18"><use href="#i-gh"/></svg><span>GitHub</span></a></div>
+</header>
+
+<section class="sky" id="accueil" style="padding-top:0;gap:0">
+  <div class="beam b1"></div><div class="beam b2"></div><div class="beam b3"></div>
+  <!-- stylised guitar, drawn in SVG -->
+  <svg class="stage-guitar" viewBox="0 0 900 360" aria-hidden="true">
+    <defs>
+      <linearGradient id="body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF5A68"/><stop offset=".55" stop-color="#D3102D"/><stop offset="1" stop-color="#7A0617"/></linearGradient>
+      <linearGradient id="neck" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F3D9B5"/><stop offset="1" stop-color="#B98B5C"/></linearGradient>
+      <linearGradient id="guard" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#F1E3E5"/></linearGradient>
+      <radialGradient id="shine" cx=".3" cy=".2" r=".7"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+      <linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".5" stop-color="#C9C3C6"/><stop offset="1" stop-color="#8F878B"/></linearGradient>
+    </defs>
+    <g transform="rotate(-12 450 180)">
+      <!-- neck + head -->
+      <rect x="330" y="160" width="430" height="40" rx="8" fill="url(#neck)"/>
+      <g fill="#E9CFA9" opacity=".9">
+        <rect x="380" y="160" width="3" height="40" fill="#C9C3C6"/><rect x="430" y="160" width="3" height="40" fill="#C9C3C6"/><rect x="476" y="160" width="3" height="40" fill="#C9C3C6"/><rect x="518" y="160" width="3" height="40" fill="#C9C3C6"/><rect x="557" y="160" width="3" height="40" fill="#C9C3C6"/><rect x="593" y="160" width="3" height="40" fill="#C9C3C6"/><rect x="626" y="160" width="3" height="40" fill="#C9C3C6"/><rect x="657" y="160" width="3" height="40" fill="#C9C3C6"/><rect x="686" y="160" width="3" height="40" fill="#C9C3C6"/><rect x="713" y="160" width="3" height="40" fill="#C9C3C6"/>
+      </g>
+      <path d="M752 150c30-14 80-22 118-12 12 3 14 18 4 24l-20 12c-6 4-6 12 0 16l20 12c10 6 8 21-4 24-38 10-88 2-118-12z" fill="url(#body)"/>
+      <g fill="url(#chrome)"><circle cx="800" cy="146" r="6"/><circle cx="830" cy="142" r="6"/><circle cx="858" cy="146" r="6"/><circle cx="800" cy="214" r="6"/><circle cx="830" cy="218" r="6"/><circle cx="858" cy="214" r="6"/></g>
+      <!-- body -->
+      <path d="M90 92c40-40 120-34 170 0 26 18 50 22 76 14 28-9 52 6 52 34 0 18-10 28-10 40s10 22 10 40c0 28-24 43-52 34-26-8-50-4-76 14-50 34-130 40-170 0C50 228 40 200 52 180c-12-20-2-48 38-88z" fill="url(#body)"/>
+      <path d="M90 92c40-40 120-34 170 0 26 18 50 22 76 14 28-9 52 6 52 34 0 18-10 28-10 40" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="3"/>
+      <path d="M118 120c30-22 90-20 120 4 14 12 34 14 52 10l20 46-20 46c-18-4-38-2-52 10-30 24-90 26-120 4-22-16-22-44-8-60-14-16-14-44 8-60z" fill="url(#guard)" opacity=".95"/>
+      <ellipse cx="180" cy="150" rx="150" ry="70" fill="url(#shine)"/>
+      <!-- pickups / bridge -->
+      <rect x="250" y="154" width="22" height="52" rx="6" fill="#2A0A10"/><rect x="200" y="154" width="22" height="52" rx="6" fill="#2A0A10"/><rect x="146" y="150" width="16" height="60" rx="4" fill="url(#chrome)"/>
+      <g fill="url(#chrome)"><circle cx="128" cy="238" r="9"/><circle cx="160" cy="252" r="9"/><circle cx="196" cy="258" r="9"/></g>
+      <!-- strings -->
+      <g stroke="#fff" stroke-opacity=".85" stroke-width="1.3"><line x1="154" y1="166" x2="790" y2="166"/><line x1="154" y1="173" x2="790" y2="173"/><line x1="154" y1="180" x2="790" y2="180"/><line x1="154" y1="187" x2="790" y2="187"/><line x1="154" y1="194" x2="790" y2="194"/></g>
+    </g>
+  </svg>
+  <div class="haze"></div>
+  <div class="hero-copy">
+    <h1 id="h1"><span class="w">Ta guitare,</span><br><span class="w">dans</span><span class="w">ton</span><span class="w">vocal.</span></h1>
+    <p class="pop" style="animation-delay:.9s">Carte son, micro de casque : Guitar To Discord envoie les deux dans un seul micro.</p>
+    <div class="ctas pop" style="animation-delay:1.05s">
+      <a class="btn pxb" href="https://github.com/VeqtaDev/GuitarToDiscord/releases/latest"><span class="pxb-k"><svg><use href="#i-dl"/></svg></span><span class="pxb-t">Télécharger gratuitement</span></a>
+      <a class="gw ghost" href="#pass">Voir l'installation</a>
+    </div>
   </div>
-</nav>
+</section>
 
 <main>
-  <header class="hero">
-    <div>
-      <div class="pill glass rv"><span class="dot"></span>Open source · Rust · Windows</div>
-      <h1 class="rv"><span class="grad">Ta guitare.</span><br>Dans Discord.</h1>
-      <p class="lead rv">Branche ta guitare sur ta carte son, garde ton micro de casque, et envoie les deux dans Discord comme un seul micro. Son natif, sans bricolage.</p>
-      <div class="cta rv">
-        <a class="btn" href="https://github.com/VeqtaDev/GuitarToDiscord/releases/latest">⬇ Télécharger pour Windows</a>
-        <a class="btn ghost" href="https://github.com/VeqtaDev/GuitarToDiscord">★ Voir sur GitHub</a>
-      </div>
-      <p class="small-note rv">Gratuit · Licence MIT · Focusrite, Scarlett, Audient, MOTU… toute carte son WASAPI ou ASIO</p>
-
-      <div class="mock glass rv" id="mock">
-        <div class="mbar glass">
-          <div class="logo">🎸</div>
-          <div><b>Guitar To Discord</b><small>Guitare + voix → un seul micro</small></div>
-          <div class="live"><span class="dot"></span>En direct</div>
-          <span class="btn">Arrêter</span>
+  <section id="pass">
+    <div class="center rv"><h2 class="h2">Ton pass backstage, en 3 minutes.</h2><p class="sub">Une seule installation, puis tu branches et tu joues.</p></div>
+    <div class="pass rv">
+      <div class="main">
+        <div class="phead"><span class="brand"><svg width="22" height="22" viewBox="0 0 48 48"><use href="#i-pick" fill="url(#lg)"/></svg>guitartodiscord<span class="lbl">PASS BACKSTAGE</span></span><span class="lbl">TOURNÉE GTD 2026</span></div>
+        <div>
+          <div class="lbl">SOURCE</div>
+          <div class="code">GTR</div>
+          <div class="place">Focusrite, entrée 1</div>
         </div>
-        <div class="mgrid">
-          <div class="mcard glass">
-            <h4><span class="ic">🎸</span>Guitare</h4>
-            <div class="sel">Analogue 1 + 2 (Focusrite USB Audio)<span>▾</span></div>
-            <div class="meter" data-meter="g"></div>
-            <div class="slider"><span>Gain</span><b>+3.0 dB</b></div>
-            <div class="track"><span style="width:56%"></span></div>
-          </div>
-          <div class="mcard glass">
-            <h4><span class="ic">🔊</span>Sortie → Discord</h4>
-            <div class="sel">CABLE Input (VB-Audio Virtual Cable)<span>▾</span></div>
-            <div class="meter" data-meter="o"></div>
-            <div class="slider"><span>Volume envoyé</span><b>+0.0 dB</b></div>
-            <div class="track"><span style="width:66%"></span></div>
-          </div>
+        <div class="route">
+          <div><span class="dot"></span><small>A · GUITARE</small></div>
+          <div class="wire"><i></i></div>
+          <div style="text-align:right"><span class="dot" style="margin-left:auto"></span><small>B · DISCORD</small></div>
+        </div>
+        <div class="fields">
+          <div><span class="lbl">MICRO</span><b>Casque</b></div>
+          <div><span class="lbl">SORTIE</span><b>VB-Cable</b></div>
+          <div><span class="lbl">PRIX</span><b class="big">0 €</b></div>
+        </div>
+        <div class="tags">
+          <span class="lbl" style="margin-right:6px">TES ÉTAPES</span>
+          <span class="tag on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="url(#lg)"/><text x="12" y="16.3" text-anchor="middle" font-size="12" font-weight="900" fill="#fff">1</text></svg>Installer VB-Cable</span>
+          <span class="tag on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="url(#lg)"/><text x="12" y="16.3" text-anchor="middle" font-size="12" font-weight="900" fill="#fff">2</text></svg>Lancer l'app</span>
+          <span class="tag"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#FCE4E7"/><text x="12" y="16.3" text-anchor="middle" font-size="12" font-weight="900" fill="#C8102E">3</text></svg>Discord › CABLE Output</span>
+          <span class="tag"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#FCE4E7"/><text x="12" y="16.3" text-anchor="middle" font-size="12" font-weight="900" fill="#C8102E">4</text></svg>Couper Krisp</span>
         </div>
       </div>
-    </div>
-  </header>
-
-  <section id="comment">
-    <div class="rv"><div class="eyebrow">Le problème</div>
-    <h2>Discord n'écoute qu'un seul micro.</h2>
-    <p class="sub">Ta guitare est sur ta Focusrite, ta voix sur ton casque. Discord ne prend qu'une entrée. Guitar To Discord mixe les deux en temps réel et les envoie dans un micro virtuel.</p></div>
-    <div class="flow rv">
-      <div class="node glass"><span class="big">🎸🎙</span><b>Carte son + micro</b><span>Focusrite (ASIO / WASAPI) et ton casque</span></div>
-      <div class="wire"></div>
-      <div class="node glass"><span class="big">⚡</span><b>Guitar To Discord</b><span>Mix, gain, noise gate, VST3</span></div>
-      <div class="wire"></div>
-      <div class="node glass"><span class="big">💬</span><b>Discord</b><span>Un micro : « Guitar To Discord »</span></div>
+      <div class="stub">
+        <div class="row"><div><span class="lbl">SCÈNE</span><b>A</b></div><div><span class="lbl">CANAL</span><b>1–2</b></div><div><span class="lbl">ACCÈS</span><b>Libre</b></div></div>
+        <div class="barcode"></div>
+        <p>VB-Cable est gratuit, sur vb-audio.com. Ton mix y passe, Discord l'entend comme un micro.</p>
+        <a class="btn pxb" href="https://vb-audio.com/Cable/"><span class="pxb-k"><svg><use href="#i-dl"/></svg></span><span class="pxb-t">Avoir VB-Cable</span></a>
+      </div>
     </div>
   </section>
 
-  <section id="features">
-    <div class="rv"><div class="eyebrow">Fonctions</div><h2>Simple. Rapide. Natif.</h2>
-    <p class="sub">Écrit en Rust, audio temps réel sans allocation, interface liquid glass.</p></div>
-    <div class="grid3">
-      <div class="feat glass rv"><div class="ic">🎚</div><h3>Mix guitare + voix</h3><p>Gain et mute séparés, volume global, soft-clip pour ne jamais saturer dans Discord.</p></div>
-      <div class="feat glass rv"><div class="ic">🎛</div><h3>Choix du canal</h3><p>Entrée 1 ou 2 de ta Focusrite, ou tous les canaux en mono. Rééchantillonnage auto 44.1 ↔ 48 kHz.</p></div>
-      <div class="feat glass rv"><div class="ic">🔇</div><h3>Noise gate</h3><p>Un gate par source pour couper le souffle des micros de guitare entre deux riffs.</p></div>
-      <div class="feat glass rv"><div class="ic">🎧</div><h3>Retour casque</h3><p>Entends ta guitare en direct dans ton casque pendant que tu joues.</p></div>
-      <div class="feat glass rv"><div class="ic">🧩</div><h3>Plugins VST3 <span class="tag">bientôt</span></h3><p>Scan des dossiers Windows standards et de tes dossiers. Chaîne d'effets prête ; traitement audio dans la prochaine version.</p></div>
-      <div class="feat glass rv"><div class="ic">⚡</div><h3>ASIO</h3><p>WASAPI par défaut (toutes les Focusrite). Build ASIO pour la latence la plus basse.</p></div>
+  <section id="son">
+    <div class="center rv"><h2 class="h2">Ton son, réglé de A à Z.</h2></div>
+    <div class="bento-grid">
+      <div class="bento wide rv" style="--i:1">
+        <div class="art"><div class="meters" id="meters"></div></div>
+        <h3>Guitare et voix, mixées en direct</h3><p>Gain et mute par source, volume envoyé, et un limiteur doux pour ne jamais saturer.</p>
+      </div>
+      <div class="bento light rv" style="--i:2">
+        <svg class="art" viewBox="0 0 120 120"><rect x="14" y="30" width="92" height="60" rx="16" fill="url(#lg)"/><circle cx="42" cy="60" r="13" fill="#fff"/><circle cx="78" cy="60" r="13" fill="#fff" opacity=".55"/><circle cx="42" cy="60" r="5" fill="#C8102E"/><circle cx="78" cy="60" r="5" fill="#C8102E" opacity=".55"/></svg>
+        <h3>Entrée 1 ou 2</h3><p>Choisis le canal de ta Focusrite, ou les deux en mono.</p>
+      </div>
+      <div class="bento light rv" style="--i:3">
+        <svg class="art" viewBox="0 0 120 120"><path d="M10 60h18l8-26 12 52 10-40 8 28 6-14h38" fill="none" stroke="url(#lg)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <h3>Noise gate</h3><p>Coupe le souffle des micros entre deux riffs.</p>
+      </div>
+      <div class="bento rv" style="--i:4">
+        <svg class="art" viewBox="0 0 120 120"><path d="M22 70a38 38 0 0 1 76 0" fill="none" stroke="url(#lgw)" stroke-width="9" stroke-linecap="round"/><rect x="14" y="64" width="22" height="36" rx="9" fill="url(#lgw)"/><rect x="84" y="64" width="22" height="36" rx="9" fill="url(#lgw)"/></svg>
+        <h3>Retour casque</h3><p>Entends ta guitare en direct pendant que tu joues.</p>
+      </div>
+      <div class="bento rv" style="--i:5">
+        <svg class="art" viewBox="0 0 120 120"><rect x="18" y="18" width="38" height="38" rx="11" fill="url(#lgw)"/><rect x="64" y="18" width="38" height="38" rx="11" fill="url(#lgw)" opacity=".6"/><rect x="18" y="64" width="38" height="38" rx="11" fill="url(#lgw)" opacity=".6"/><rect x="64" y="64" width="38" height="38" rx="11" fill="url(#lgw)" opacity=".35"/></svg>
+        <h3>Plugins VST3</h3><p>Scan auto de tes dossiers, chaîne d'effets. Le son arrive dans la prochaine version.</p>
+      </div>
     </div>
   </section>
 
-  <section id="install">
-    <div class="rv"><div class="eyebrow">Installation</div><h2>Prêt en 3 minutes.</h2></div>
-    <div class="steps">
-      <div class="step glass rv"><b>Installe VB-Cable (gratuit)</b><span>Il crée le micro virtuel. <a href="https://vb-audio.com/Cable/" style="text-decoration:underline">vb-audio.com/Cable</a></span></div>
-      <div class="step glass rv"><b>Optionnel : renomme-le</b><span>Panneau de configuration › Son › Enregistrement › « CABLE Output » › Propriétés › nom : <code>Guitar To Discord</code></span></div>
-      <div class="step glass rv"><b>Lance Guitar To Discord</b><span>Choisis ta carte son, ton micro et <code>CABLE Input</code> en sortie. Clique sur Démarrer.</span></div>
-      <div class="step glass rv"><b>Dans Discord</b><span>Paramètres › Voix et vidéo › Périphérique d'entrée › <code>CABLE Output</code>. Désactive Krisp / suppression du bruit, sinon ta guitare sera coupée.</span></div>
+  <section id="versions">
+    <div class="center rv"><h2 class="h2">Choisis ta version.</h2><p class="sub">Toutes gratuites. Le code est sur GitHub.</p></div>
+    <div class="plans">
+      <div class="plan rv" style="--i:1">
+        <span class="tt">WASAPI</span><span class="ds">L'app prête à lancer. Marche avec toutes les Focusrite.</span>
+        <span class="pr">0 € <small>à vie</small></span>
+        <a class="pb" href="https://github.com/VeqtaDev/GuitarToDiscord/releases/latest">Télécharger l'exe</a>
+        <ul><li><svg><use href="#i-check"/></svg>Guitare + micro</li><li><svg><use href="#i-check"/></svg>Gain, gate, retour casque</li><li><svg><use href="#i-check"/></svg>Réglages sauvegardés</li></ul>
+      </div>
+      <div class="plan mid rv" style="--i:2">
+        <span class="tt">ASIO</span><span class="ds">La latence la plus basse, pour les puristes.</span>
+        <span class="pr">0 € <small>à compiler</small></span>
+        <a class="pb btn" href="https://github.com/VeqtaDev/GuitarToDiscord#asio">Voir le guide ASIO</a>
+        <span class="sep">EN PLUS</span>
+        <ul><li><svg><use href="#i-check"/></svg>Pilote ASIO natif</li><li><svg><use href="#i-check"/></svg>Buffers plus courts</li><li><svg><use href="#i-check"/></svg><code style="font-size:13px">--features asio</code></li></ul>
+      </div>
+      <div class="plan gold rv" style="--i:3">
+        <span class="tt">Contributeur</span><span class="ds">Pour ceux qui veulent les nouveautés en premier.</span>
+        <span class="pr">★ <small>sur GitHub</small></span>
+        <a class="pb" href="https://github.com/VeqtaDev/GuitarToDiscord">Suivre le projet</a>
+        <ul><li><svg><use href="#i-check"/></svg>Traitement VST3</li><li><svg><use href="#i-check"/></svg>Interfaces des plugins</li><li><svg><use href="#i-check"/></svg>Pilote « Guitar To Discord »</li></ul>
+      </div>
     </div>
   </section>
 
-  <section id="faq">
-    <div class="rv"><div class="eyebrow">FAQ</div><h2>Questions fréquentes.</h2></div>
-    <div class="faq">
-      <details class="glass rv"><summary>Pourquoi il faut VB-Cable ?</summary><p>Créer un vrai périphérique d'entrée Windows demande un pilote audio noyau signé par Microsoft. VB-Cable en fournit un, gratuit et fiable. L'app joue le mix dedans, et Discord le voit comme un micro. Un pilote « Guitar To Discord » maison est dans la roadmap.</p></details>
-      <details class="glass rv"><summary>Ça marche avec ma Focusrite en ASIO ?</summary><p>Oui. Le binaire publié utilise WASAPI, qui fonctionne avec toutes les Focusrite. Pour ASIO, compile avec <code>cargo build --release --features asio</code> (SDK ASIO de Steinberg requis), puis choisis « ASIO » dans le menu Pilote.</p></details>
-      <details class="glass rv"><summary>Et OBS, Teams, TeamSpeak ?</summary><p>Tout ce qui accepte un micro fonctionne : sélectionne simplement « CABLE Output » comme entrée.</p></details>
-      <details class="glass rv"><summary>Les plugins VST3 marchent déjà ?</summary><p>Le scan et la chaîne sont dans cette version. Le traitement audio et l'ouverture des interfaces des plugins arrivent dans la suivante.</p></details>
+  <section>
+    <div class="faqwrap">
+      <div style="display:flex;flex-direction:column;gap:12px" class="rv">
+        <span class="kick">BALANCE SON</span>
+        <h2 id="questions" class="h2">Un, deux… un, deux, vos questions.</h2>
+        <svg class="mascot bob" viewBox="0 0 300 300" aria-hidden="true">
+          <defs><radialGradient id="amp" cx=".35" cy=".25" r=".9"><stop offset="0" stop-color="#5A1A24"/><stop offset="1" stop-color="#1E0508"/></radialGradient><radialGradient id="cone" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#4A3A3D"/><stop offset="1" stop-color="#0E0506"/></radialGradient></defs>
+          <ellipse cx="150" cy="278" rx="110" ry="12" fill="#C8102E" opacity=".12"/>
+          <rect x="40" y="70" width="220" height="200" rx="30" fill="url(#amp)"/>
+          <rect x="40" y="70" width="220" height="56" rx="26" fill="url(#lg)"/>
+          <rect x="52" y="78" width="196" height="16" rx="8" fill="#fff" opacity=".25"/>
+          <g fill="#fff"><circle cx="78" cy="106" r="9"/><circle cx="110" cy="106" r="9"/><circle cx="142" cy="106" r="9"/><circle cx="174" cy="106" r="9"/></g>
+          <text x="236" y="112" text-anchor="end" font-family="Nunito" font-weight="900" font-style="italic" font-size="18" fill="#fff">GTD</text>
+          <circle cx="150" cy="196" r="58" fill="url(#cone)"/><circle cx="150" cy="196" r="20" fill="#2A1013"/><circle cx="140" cy="186" r="6" fill="#fff" opacity=".2"/>
+          <path d="M150 40c-8-18-30-18-30 0 0 14 30 26 30 26s30-12 30-26c0-18-22-18-30 0z" fill="url(#lg)" class="float"/>
+        </svg>
+      </div>
+      <div class="faq gw rv" id="faq">
+        <div class="qa open"><button><span><svg class="ic" viewBox="0 0 24 24"><path d="M12.9 3c.6 5 2.6 8.1 8.1 9-5.2.8-7.4 3.7-8.1 9-.7-5.3-2.9-8.2-8.1-9 5.2-.8 7.4-3.7 8.1-9Z" fill="url(#lg)"/></svg>Pourquoi j'ai besoin de VB-Cable ?</span><svg class="chev"><use href="#i-chev"/></svg></button><div class="ans"><p>Créer un vrai micro dans Windows demande un pilote audio signé par Microsoft. VB-Cable en fournit un, gratuit. L'app joue ton mix dedans, Discord l'entend comme un micro. Un pilote « Guitar To Discord » est prévu.</p></div></div>
+        <div class="qa"><button><span><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="4" fill="url(#lg)"/><circle cx="9" cy="12" r="2.4" fill="#fff"/><circle cx="15" cy="12" r="2.4" fill="#fff" opacity=".6"/></svg>Ça marche avec ma Focusrite ?</span><svg class="chev"><use href="#i-chev"/></svg></button><div class="ans"><p>Oui. L'exe utilise WASAPI, qui marche avec toutes les Focusrite, Scarlett, Audient ou MOTU. Pour ASIO, compile avec <code>--features asio</code>.</p></div></div>
+        <div class="qa"><button><span><svg class="ic" viewBox="0 0 24 24"><path d="M12 3c5 0 9 3.4 9 7.6s-4 7.6-9 7.6c-.9 0-1.8-.1-2.6-.3L5 20l.9-3.6C4.1 15 3 13 3 10.6 3 6.4 7 3 12 3Z" fill="url(#lg)"/></svg>Discord coupe ma guitare, pourquoi ?</span><svg class="chev"><use href="#i-chev"/></svg></button><div class="ans"><p>C'est Krisp. Dans Discord, coupe la suppression du bruit et l'annulation d'écho, puis baisse le seuil de l'activation vocale.</p></div></div>
+        <div class="qa"><button><span><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2" fill="url(#lg)"/><rect x="13" y="4" width="7" height="7" rx="2" fill="url(#lg)" opacity=".55"/><rect x="4" y="13" width="7" height="7" rx="2" fill="url(#lg)" opacity=".55"/><rect x="13" y="13" width="7" height="7" rx="2" fill="url(#lg)" opacity=".3"/></svg>Mes plugins VST3 marchent déjà ?</span><svg class="chev"><use href="#i-chev"/></svg></button><div class="ans"><p>L'app trouve tes plugins et tu peux monter ta chaîne. Le traitement du son et l'ouverture des fenêtres des plugins arrivent dans la prochaine version.</p></div></div>
+        <div class="qa"><button><span><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="url(#lg)"/><path d="M8 12.5l2.6 2.6L16 9.6" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Et OBS, Teams, TeamSpeak ?</span><svg class="chev"><use href="#i-chev"/></svg></button><div class="ans"><p>Tout ce qui accepte un micro : choisis « CABLE Output » comme entrée.</p></div></div>
+      </div>
     </div>
   </section>
 
-  <div class="final glass rv">
-    <h2>Joue avec tes potes.<br><span class="grad">En vrai.</span></h2>
-    <p class="sub" style="margin:0 auto 28px">Open source, gratuit, sans compte.</p>
-    <div class="cta"><a class="btn" href="https://github.com/VeqtaDev/GuitarToDiscord/releases/latest">⬇ Télécharger</a><a class="btn ghost" href="https://github.com/VeqtaDev/GuitarToDiscord">Contribuer sur GitHub</a></div>
-  </div>
+  <section class="final center">
+    <svg width="120" height="120" viewBox="0 0 48 48" class="float" style="filter:drop-shadow(0 22px 22px rgba(120,10,30,.3))"><use href="#i-pick" fill="url(#lg)"/><path d="M17 17c3-3 11-3 14 0" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".85"/></svg>
+    <h2 class="h2" style="font-size:clamp(44px,6vw,60px)">Bon concert.</h2>
+    <p>Gratuit, open source, sans compte. Ta scène t'attend.</p>
+    <a class="btn pxb" href="https://github.com/VeqtaDev/GuitarToDiscord/releases/latest" style="height:60px;padding:0 32px;font-size:17px;margin-top:6px"><span class="pxb-k"><svg><use href="#i-dl"/></svg></span><span class="pxb-t">Monter sur scène</span></a>
+  </section>
 </main>
 
-<footer>Guitar To Discord · Licence MIT · <a href="https://github.com/VeqtaDev/GuitarToDiscord">GitHub</a> · VB-Cable est un produit de VB-Audio Software.</footer>
+<footer class="gw">
+  <div class="cols">
+    <div><a class="logo" href="#accueil" style="color:var(--ink);text-shadow:none;width:auto"><svg width="34" height="34" viewBox="0 0 48 48"><use href="#i-pick" fill="url(#lg)"/></svg>guitartodiscord</a><p style="margin:12px 0 0;font-weight:700;font-size:14px;color:var(--mute);max-width:260px">Ta guitare et ta voix dans Discord, sur un seul micro.</p></div>
+    <div><h4>Jouer</h4><a class="fl" href="https://github.com/VeqtaDev/GuitarToDiscord/releases/latest">Télécharger</a><a class="fl" href="#pass">Installation</a><a class="fl" href="#son">Fonctions</a></div>
+    <div><h4>Aide</h4><a class="fl" href="#questions">Questions</a><a class="fl" href="https://github.com/VeqtaDev/GuitarToDiscord/issues">Signaler un bug</a><a class="fl" href="https://vb-audio.com/Cable/">VB-Cable</a></div>
+    <div><h4>Projet</h4><a class="fl" href="https://github.com/VeqtaDev/GuitarToDiscord">Code source</a><a class="fl" href="https://github.com/VeqtaDev/GuitarToDiscord/blob/main/LICENSE">Licence MIT</a></div>
+  </div>
+  <div class="bot"><span>© 2026 Guitar To Discord · open source</span><span>Fait pour jouer fort</span></div>
+</footer>
 
 <script>
-// Reveal on scroll
-const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.14});
-document.querySelectorAll('.rv,.mock').forEach((el,i)=>{el.style.transitionDelay=(el.classList.contains('feat')||el.classList.contains('step')?(i%3)*80:0)+'ms';io.observe(el)});
-// Nav shrinks on scroll
-const nav=document.getElementById('nav');
-addEventListener('scroll',()=>nav.classList.toggle('small',scrollY>40),{passive:true});
-// Specular highlight follows the pointer on every glass surface
-document.addEventListener('pointermove',e=>{
-  for(const g of document.querySelectorAll('.glass')){
-    const r=g.getBoundingClientRect();
-    if(e.clientY<r.top-200||e.clientY>r.bottom+200)continue;
-    g.style.setProperty('--mx',(e.clientX-r.left)+'px');
-    g.style.setProperty('--my',(e.clientY-r.top)+'px');
-  }
-},{passive:true});
-// Fake live meters in the mockup
-const meters=[...document.querySelectorAll('[data-meter]')].map(m=>{for(let i=0;i<32;i++)m.appendChild(document.createElement('i'));return m});
-let ph=0;
-function tick(){
-  ph+=.07;
-  meters.forEach((m,k)=>{
-    const lvl=.45+.3*Math.sin(ph*(k?1.3:1.7))*Math.sin(ph*.37+k)+.15*Math.random();
-    [...m.children].forEach((c,i)=>{const t=i/32;c.style.background=t<lvl?(t>.88?'#fff':`rgb(${196+59*t/.88|0},${36*t|0},${42+35*t|0})`):'rgba(255,255,255,.06)'});
-  });
-  if(!matchMedia('(prefers-reduced-motion:reduce)').matches)requestAnimationFrame(tick);
-}
-tick();
+// Vapor letters on the hero title (Roamly .vl)
+(()=>{let d=0;document.querySelectorAll('#h1 .w').forEach(w=>{const t=w.textContent;w.textContent='';for(const ch of t){const s=document.createElement('span');s.className='vl';s.textContent=ch===' '?' ':ch;s.style.animationDelay=(d+=.035).toFixed(3)+'s';w.appendChild(s)}})})();
+// Header state + sliding nav pill
+const top_=document.getElementById('top'),nav=document.getElementById('nav'),pill=document.getElementById('nvpill'),links=[...nav.querySelectorAll('.nvb')];
+function place(a){const r=a.getBoundingClientRect(),n=nav.getBoundingClientRect();pill.style.left=(r.left-n.left)+'px';pill.style.width=r.width+'px'}
+function setOn(a){links.forEach(l=>l.classList.toggle('on',l===a));requestAnimationFrame(()=>setTimeout(()=>place(a),0));setTimeout(()=>place(a),500)}
+links.forEach(a=>a.addEventListener('mouseenter',()=>setOn(a)));
+nav.addEventListener('mouseleave',()=>setOn(current||links[0]));
+let current=links[0];
+const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+addEventListener('scroll',()=>{top_.classList.toggle('sc',scrollY>40);let c=links[0];secs.forEach((s,i)=>{if(s&&s.getBoundingClientRect().top<innerHeight*.4)c=links[i]});if(c!==current){current=c;setOn(c)}},{passive:true});
+addEventListener('load',()=>place(links[0]));addEventListener('resize',()=>place(current));place(links[0]);
+// Reveal
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.15});
+document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+// FAQ accordion
+document.querySelectorAll('.qa').forEach(q=>{const a=q.querySelector('.ans');const set=()=>a.style.maxHeight=q.classList.contains('open')?a.scrollHeight+'px':'0px';set();
+  q.querySelector('button').addEventListener('click',()=>{document.querySelectorAll('.qa').forEach(o=>{if(o!==q){o.classList.remove('open');o.querySelector('.ans').style.maxHeight='0px'}});q.classList.toggle('open');set()})});
+// Live meters in the bento
+const m=document.getElementById('meters');for(let i=0;i<36;i++)m.appendChild(document.createElement('i'));
+let ph=0;(function tick(){ph+=.06;[...m.children].forEach((b,i)=>{const v=.25+.55*Math.abs(Math.sin(ph+i*.32)*Math.sin(ph*.5+i*.08))+.12*Math.random();b.style.height=(v*100)+'%'});if(!matchMedia('(prefers-reduced-motion:reduce)').matches)setTimeout(()=>requestAnimationFrame(tick),60)})();
 </script>
 </body>
 </html>
