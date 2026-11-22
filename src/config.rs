@@ -16,6 +16,51 @@ impl Default for ChannelSel {
     }
 }
 
+/// One plugin in the guitar chain, with its saved state.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(from = "ChainEntryRepr")]
+pub struct ChainEntry {
+    pub path: PathBuf,
+    pub enabled: bool,
+    pub state: Option<String>,
+    pub ctrl_state: Option<String>,
+}
+
+impl ChainEntry {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path, enabled: true, state: None, ctrl_state: None }
+    }
+}
+
+/// Accepts the old format (a bare path) and the current one.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ChainEntryRepr {
+    Path(PathBuf),
+    Full {
+        path: PathBuf,
+        #[serde(default = "yes")]
+        enabled: bool,
+        #[serde(default)]
+        state: Option<String>,
+        #[serde(default)]
+        ctrl_state: Option<String>,
+    },
+}
+
+fn yes() -> bool {
+    true
+}
+
+impl From<ChainEntryRepr> for ChainEntry {
+    fn from(r: ChainEntryRepr) -> Self {
+        match r {
+            ChainEntryRepr::Path(path) => ChainEntry::new(path),
+            ChainEntryRepr::Full { path, enabled, state, ctrl_state } => ChainEntry { path, enabled, state, ctrl_state },
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -39,7 +84,7 @@ pub struct Config {
     pub mic_muted: bool,
 
     pub vst_custom_dirs: Vec<PathBuf>,
-    pub vst_chain: Vec<PathBuf>,
+    pub vst_chain: Vec<ChainEntry>,
     pub auto_start: bool,
 }
 

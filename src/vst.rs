@@ -78,6 +78,25 @@ fn read_moduleinfo(bundle: &Path) -> Option<ModuleInfo> {
     serde_json::from_str(&cleaned).ok()
 }
 
+/// True when the plugin binary is built for this process's architecture
+/// (32-bit plugins cannot load in a 64-bit app).
+pub fn is_loadable(path: &Path) -> bool {
+    let Ok(bin) = crate::vst_host::binary_path(path) else { return false };
+    let Ok(bytes) = std::fs::read(&bin).map(|b| b.into_iter().take(4096).collect::<Vec<u8>>()) else {
+        return false;
+    };
+    if bytes.len() < 0x40 || &bytes[0..2] != b"MZ" {
+        return false;
+    }
+    let pe = u32::from_le_bytes([bytes[0x3c], bytes[0x3d], bytes[0x3e], bytes[0x3f]]) as usize;
+    if bytes.len() < pe + 6 || &bytes[pe..pe + 4] != b"PE\0\0" {
+        return false;
+    }
+    let machine = u16::from_le_bytes([bytes[pe + 4], bytes[pe + 5]]);
+    let want: u16 = if cfg!(target_arch = "aarch64") { 0xAA64 } else { 0x8664 };
+    machine == want
+}
+
 /// Scan every folder and return a de-duplicated, sorted list.
 pub fn scan(dirs: &[PathBuf]) -> Vec<PluginInfo> {
     let mut out: Vec<PluginInfo> = Vec::new();
@@ -113,6 +132,9 @@ pub fn scan(dirs: &[PathBuf]) -> Vec<PluginInfo> {
                 }
                 None => (stem.clone(), None, None),
             };
+            if !is_loadable(path) {
+                continue;
+            }
             out.push(PluginInfo {
                 name,
                 vendor,

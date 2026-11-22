@@ -1,7 +1,9 @@
 use crate::audio::{self, DeviceInfo, Engine, EngineSettings, InputSel, Shared};
 use crate::config::{ChannelSel, Config};
 use crate::theme::{self, TEXT, TEXT_DIM};
+use crate::config::ChainEntry;
 use crate::vst::{self, PluginInfo};
+use crate::vst_host::PluginHost;
 use eframe::egui::{self, Align, Layout, RichText, ScrollArea, Vec2};
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
@@ -21,6 +23,10 @@ pub struct App {
     outputs: Vec<DeviceInfo>,
 
     plugins: Vec<PluginInfo>,
+    host: PluginHost,
+    chain_dirty: bool,
+    /// Plugin being checked in a child process before joining the chain.
+    checking: Option<(String, PathBuf, std::sync::mpsc::Receiver<Result<(), String>>)>,
     plugin_filter: String,
     tab: usize,
     dirty: bool,
@@ -41,6 +47,9 @@ impl App {
             inputs: vec![],
             outputs: vec![],
             plugins: vec![],
+            host: PluginHost::default(),
+            chain_dirty: false,
+            checking: None,
             plugin_filter: String::new(),
             tab: 0,
             dirty: false,
@@ -49,6 +58,7 @@ impl App {
         app.refresh_devices();
         app.autoselect();
         app.rescan_plugins();
+        app.host.sync(&app.cfg.vst_chain);
         app.push_params();
         if app.cfg.auto_start {
             app.start();
@@ -100,6 +110,7 @@ impl App {
     }
 
     fn start(&mut self) {
+        self.host.stop();
         self.engine = None;
         let Some(output) = self.cfg.output_device.clone() else {
             self.error = Some("Choisis le périphérique virtuel de sortie (ex : CABLE Input).".into());
@@ -114,9 +125,13 @@ impl App {
             mic: self.cfg.mic_device.clone().map(|device| InputSel { host: None, device, channel: self.cfg.mic_channel }),
             output,
             monitor: if self.cfg.monitor_enabled { self.cfg.monitor_device.clone() } else { None },
+            chain: Some(self.host.slot.clone()),
         };
         match Engine::start(settings, self.shared.clone()) {
             Ok(e) => {
+                if let Some(rate) = e.guitar_rate {
+                    self.host.start(rate as f64);
+                }
                 self.engine = Some(e);
                 self.error = None;
             }
@@ -125,6 +140,7 @@ impl App {
     }
 
     fn stop(&mut self) {
+        self.host.stop();
         self.engine = None;
         self.shared.guitar_level.set(0.0);
         self.shared.mic_level.set(0.0);
@@ -204,6 +220,39 @@ fn draw_pick(p: &egui::Painter, r: egui::Rect) {
     );
 }
 
+/// Load the plugin in a child process first: a plugin that crashes there
+/// would otherwise take the whole app down.
+fn check_plugin(path: PathBuf) -> std::sync::mpsc::Receiver<Result<(), String>> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let res = (|| {
+            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+            let mut cmd = std::process::Command::new(exe);
+            cmd.arg("--vsttest-one").arg(&path);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+            }
+            let out = cmd.output().map_err(|e| e.to_string())?;
+            let text = String::from_utf8_lossy(&out.stdout);
+            if !out.status.success() {
+                return Err("ce plugin plante au chargement, il n'a pas été ajouté.".to_string());
+            }
+            if let Some(l) = text.lines().find(|l| l.starts_with("LOAD FAIL")) {
+                return Err(l.trim_start_matches("LOAD FAIL:").trim().to_string());
+            }
+            if text.lines().any(|l| l.starts_with("OK ")) {
+                Ok(())
+            } else {
+                Err("le plugin n'a pas répondu au test.".to_string())
+            }
+        })();
+        let _ = tx.send(res);
+    });
+    rx
+}
+
 fn open_url(url: &str) {
     let _ = std::process::Command::new("explorer").arg(url).spawn();
 }
@@ -232,11 +281,19 @@ impl eframe::App for App {
             self.header(ui, t);
             ui.add_space(18.0);
             let title = match self.tab {
-                0 => ("Ta guitare, dans ton vocal.", "Carte son et micro de casque, envoyés dans un seul micro."),
-                1 => ("Tes plugins, ta chaîne.", "Scan auto des dossiers VST3 de Windows et des tiens."),
-                _ => ("Prêt en 3 minutes.", "Une seule installation, puis tu branches et tu joues."),
+                0 => (("Ta ", "guitare", " dans ton vocal."), "Carte son et micro de casque, envoyés dans un seul micro."),
+                1 => (("Tes ", "plugins", ", ta chaîne."), "Tes amplis et effets VST3, appliqués à ta guitare en direct."),
+                _ => (("Prêt en ", "3 minutes", "."), "Une seule installation, puis tu branches et tu joues."),
             };
-            ui.label(RichText::new(title.0).font(theme::black(38.0)).color(egui::Color32::WHITE));
+            {
+                use egui::text::{LayoutJob, TextFormat};
+                let f = theme::black(40.0);
+                let mut job = LayoutJob::default();
+                job.append(title.0 .0, 0.0, TextFormat::simple(f.clone(), egui::Color32::WHITE));
+                job.append(title.0 .1, 0.0, TextFormat::simple(f.clone(), theme::RED_HOT));
+                job.append(title.0 .2, 0.0, TextFormat::simple(f, egui::Color32::WHITE));
+                ui.label(job);
+            }
             ui.label(RichText::new(title.1).font(theme::bold(15.0)).color(theme::INK2));
             ui.add_space(22.0);
             if let Some(err) = self.error.clone() {
@@ -260,6 +317,28 @@ impl eframe::App for App {
             });
         });
 
+        self.host.poll_editors();
+        if let Some((name, path, rx)) = &self.checking {
+            match rx.try_recv() {
+                Ok(Ok(())) => {
+                    self.cfg.vst_chain.push(ChainEntry::new(path.clone()));
+                    self.chain_dirty = true;
+                    self.checking = None;
+                }
+                Ok(Err(e)) => {
+                    self.error = Some(format!("{name} : {e}"));
+                    self.checking = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.checking = None,
+                Err(_) => {}
+            }
+        }
+        if self.chain_dirty {
+            self.host.save_states(&mut self.cfg.vst_chain);
+            self.host.sync(&self.cfg.vst_chain);
+            self.chain_dirty = false;
+            self.dirty = true;
+        }
         if self.dirty {
             self.push_params();
             self.cfg.save();
@@ -270,7 +349,9 @@ impl eframe::App for App {
     }
 
     fn on_exit(&mut self) {
+        self.host.save_states(&mut self.cfg.vst_chain);
         self.cfg.save();
+        self.stop();
     }
 }
 
@@ -317,7 +398,7 @@ impl App {
             // ---------------- left column: inputs ----------------
             ui.allocate_ui_with_layout(Vec2::new(col_w, 0.0), Layout::top_down(Align::Min), |ui| {
                 theme::card(ui, 0.25, |ui| {
-                    theme::section_title(ui, "♫", "Guitare", "Ta carte son (Focusrite, Scarlett…)");
+                    theme::section_title(ui, "Entrée 1", "Guitare", "Ta carte son (Focusrite, Scarlett…)");
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("Pilote").color(TEXT_DIM));
                         let mut host = self.cfg.host.clone().unwrap_or_else(|| self.hosts.first().cloned().unwrap_or_default());
@@ -372,7 +453,7 @@ impl App {
                 });
                 ui.add_space(14.0);
                 theme::card(ui, 0.15, |ui| {
-                    theme::section_title(ui, "◉", "Micro", "Ton casque ou ton micro habituel");
+                    theme::section_title(ui, "Entrée 2", "Micro", "Ton casque ou ton micro habituel");
                     if device_combo(ui, "mic_dev", &mut self.cfg.mic_device, &self.inputs, true) {
                         restart = true;
                         self.dirty = true;
@@ -405,7 +486,7 @@ impl App {
             // ---------------- right column: output ----------------
             ui.allocate_ui_with_layout(Vec2::new(col_w, 0.0), Layout::top_down(Align::Min), |ui| {
                 theme::card(ui, 0.45, |ui| {
-                    theme::section_title(ui, "➜", "Sortie → Discord", "Le micro virtuel que Discord écoute");
+                    theme::section_title(ui, "Sortie", "Vers Discord", "Le micro virtuel que Discord écoute");
                     if device_combo(ui, "out_dev", &mut self.cfg.output_device, &self.outputs, false) {
                         restart = true;
                         self.dirty = true;
@@ -440,7 +521,7 @@ impl App {
                 ui.add_space(14.0);
                 theme::card(ui, 0.15, |ui| {
                     ui.horizontal(|ui| {
-                        theme::section_title(ui, "∩", "Retour casque", "T'entendre en direct dans ton casque");
+                        theme::section_title(ui, "Retour", "Retour casque", "T'entendre en direct dans ton casque");
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if theme::toggle(ui, &mut self.cfg.monitor_enabled).changed() {
                                 restart = true;
@@ -501,7 +582,7 @@ impl App {
 
     fn plugins_tab(&mut self, ui: &mut egui::Ui) {
         theme::card(ui, 0.3, |ui| {
-            theme::section_title(ui, "▦", "Dossiers VST3", "Dossiers Windows standards + tes dossiers");
+            theme::section_title(ui, "Dossiers", "Dossiers VST3", "Dossiers Windows standards + tes dossiers");
             for d in vst::default_dirs() {
                 ui.label(RichText::new(format!("•  {}", d.display())).size(12.5).color(TEXT_DIM));
             }
@@ -540,8 +621,12 @@ impl App {
         ui.horizontal_top(|ui| {
             ui.allocate_ui_with_layout(Vec2::new(col_w, 0.0), Layout::top_down(Align::Min), |ui| {
                 theme::card(ui, 0.15, |ui| {
-                    theme::section_title(ui, "⌕", &format!("{} plugins trouvés", self.plugins.len()), "Clique pour ajouter à la chaîne guitare");
+                    theme::section_title(ui, "Bibliothèque", &format!("{} plugins trouvés", self.plugins.len()), "Clique pour ajouter à la chaîne guitare");
                     ui.add(egui::TextEdit::singleline(&mut self.plugin_filter).hint_text("Rechercher…").desired_width(f32::INFINITY));
+                    if let Some((name, _, _)) = &self.checking {
+                        ui.label(RichText::new(format!("Vérification de {name}…")).font(theme::bold(12.5)).color(theme::RED_HOT));
+                        ui.ctx().request_repaint();
+                    }
                     let f = self.plugin_filter.to_lowercase();
                     let mut add: Option<PathBuf> = None;
                     ScrollArea::vertical().id_salt("plist").max_height(320.0).show(ui, |ui| {
@@ -567,21 +652,42 @@ impl App {
                         }
                     });
                     if let Some(p) = add {
-                        self.cfg.vst_chain.push(p);
-                        self.dirty = true;
+                        if self.checking.is_none() {
+                            let name = self.plugins.iter().find(|x| x.path == p).map(|x| x.name.clone()).unwrap_or_default();
+                            self.checking = Some((name, p.clone(), check_plugin(p)));
+                        }
                     }
                 });
             });
             ui.add_space(14.0);
             ui.allocate_ui_with_layout(Vec2::new(col_w, 0.0), Layout::top_down(Align::Min), |ui| {
                 theme::card(ui, 0.4, |ui| {
-                    theme::section_title(ui, "≡", "Chaîne guitare", "Ordre de traitement, de haut en bas");
+                    theme::section_title(ui, "Chaîne", "Chaîne guitare", "Ordre de traitement, de haut en bas");
                     let mut action: Option<(usize, i32)> = None;
-                    for (i, p) in self.cfg.vst_chain.iter().enumerate() {
-                        let name = self.plugins.iter().find(|x| &x.path == p).map(|x| x.name.clone()).unwrap_or_else(|| p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
+                    let mut open: Option<usize> = None;
+                    let mut toggled: Option<(usize, bool)> = None;
+                    for (i, e) in self.cfg.vst_chain.iter().enumerate() {
+                        let inst = self.host.instances.get(i);
+                        let name = match inst {
+                            Some(Ok(p)) => p.name.clone(),
+                            _ => e.path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
+                        };
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new(format!("{}.", i + 1)).font(theme::bold(14.0)).color(theme::RED_HOT));
-                            ui.label(RichText::new(name).color(TEXT));
+                            ui.label(RichText::new(format!("{}.", i + 1)).font(theme::black(15.0)).color(theme::RED_HOT));
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                ui.label(RichText::new(&name).font(theme::bold(14.0)).color(TEXT));
+                                match inst {
+                                    Some(Ok(p)) => {
+                                        let io = format!("{} → {} canaux", p.in_ch, p.out_ch);
+                                        ui.label(RichText::new(io).size(11.5).color(TEXT_DIM));
+                                    }
+                                    Some(Err(err)) => {
+                                        ui.label(RichText::new(format!("Erreur : {err}")).size(11.5).color(theme::RED_HOT));
+                                    }
+                                    None => {}
+                                }
+                            });
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 if theme::chip(ui, "✕").clicked() {
                                     action = Some((i, 0));
@@ -592,10 +698,38 @@ impl App {
                                 if theme::chip(ui, "↑").clicked() {
                                     action = Some((i, -1));
                                 }
+                                if let Some(Ok(p)) = inst {
+                                    if p.has_editor() {
+                                        let label = if p.editor_open() { "Fenêtre ouverte" } else { "Ouvrir" };
+                                        if theme::chip(ui, label).clicked() {
+                                            open = Some(i);
+                                        }
+                                    }
+                                    let mut on = e.enabled;
+                                    if theme::toggle(ui, &mut on).changed() {
+                                        toggled = Some((i, on));
+                                    }
+                                }
                             });
                         });
+                        ui.add_space(4.0);
+                    }
+                    if let Some((i, on)) = toggled {
+                        self.cfg.vst_chain[i].enabled = on;
+                        if let Some(Ok(p)) = self.host.instances.get(i) {
+                            p.enabled.store(on, std::sync::atomic::Ordering::Relaxed);
+                        }
+                        self.dirty = true;
+                    }
+                    if let Some(i) = open {
+                        if let Some(Ok(p)) = self.host.instances.get_mut(i) {
+                            if let Err(err) = p.open_editor() {
+                                self.error = Some(format!("{}: {err:#}", p.name));
+                            }
+                        }
                     }
                     if let Some((i, d)) = action {
+                        self.host.save_states(&mut self.cfg.vst_chain);
                         match d {
                             0 => {
                                 self.cfg.vst_chain.remove(i);
@@ -604,13 +738,13 @@ impl App {
                             -1 if i > 0 => self.cfg.vst_chain.swap(i, i - 1),
                             _ => {}
                         }
-                        self.dirty = true;
+                        self.chain_dirty = true;
                     }
                     if self.cfg.vst_chain.is_empty() {
                         ui.label(RichText::new("Chaîne vide : le son de ta guitare part brut, en natif.").color(TEXT_DIM));
                     }
                     ui.add_space(6.0);
-                    ui.label(RichText::new("Aperçu : le scan et la chaîne sont prêts, le traitement audio VST3 (et l'ouverture des interfaces des plugins) arrive dans la prochaine version.").size(11.5).color(TEXT_DIM));
+                    ui.label(RichText::new("La chaîne traite ta guitare dès que tu cliques sur Démarrer. Les réglages des plugins sont sauvegardés quand tu fermes l'app.").size(11.5).color(TEXT_DIM));
                 });
             });
         });
@@ -618,7 +752,7 @@ impl App {
 
     fn help_tab(&mut self, ui: &mut egui::Ui) {
         theme::card(ui, 0.3, |ui| {
-            theme::section_title(ui, "★", "Mise en route", "3 minutes, une seule fois");
+            theme::section_title(ui, "Installation", "Mise en route", "3 minutes, une seule fois");
             let steps = [
                 ("1", "Installe VB-Cable (gratuit). Il crée « CABLE Input » (sortie) et « CABLE Output » (entrée)."),
                 ("2", "Optionnel : dans Panneau de configuration › Son › Enregistrement, renomme « CABLE Output » en « Guitar To Discord »."),
@@ -635,9 +769,10 @@ impl App {
         });
         ui.add_space(14.0);
         theme::card(ui, 0.15, |ui| {
-            theme::section_title(ui, "!", "Astuces", "Pour un son propre");
+            theme::section_title(ui, "Conseils", "Astuces", "Pour un son propre");
             for s in [
                 "ASIO (Focusrite) : la build par défaut utilise WASAPI, qui marche avec toutes les Focusrite. Pour ASIO, compile avec --features asio.",
+                "Plugins : ajoute tes amplis VST3 dans l'onglet Plugins, puis Ouvrir pour les régler. Certains ont besoin de quelques secondes de chauffe ou de leur licence.",
                 "Latence : règle ta Focusrite et le câble sur la même fréquence (48 kHz) pour éviter tout rééchantillonnage.",
                 "Larsen ou écho : n'active pas le Retour casque si Windows « écoute » déjà ta carte son.",
                 "Mode Discord : passe en « Activation vocale » avec un seuil bas, ou en Push-to-talk pendant que tu joues.",

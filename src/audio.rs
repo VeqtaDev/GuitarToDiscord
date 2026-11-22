@@ -261,11 +261,15 @@ pub struct EngineSettings {
     pub mic: Option<InputSel>,
     pub output: String,
     pub monitor: Option<String>,
+    /// VST3 chain applied to the guitar (filled by the UI once started).
+    pub chain: Option<Arc<crate::vst_host::ChainSlot>>,
 }
 
 pub struct Engine {
     _streams: Vec<Stream>,
     pub summary: String,
+    /// Sample rate of the guitar input (plugins run at this rate).
+    pub guitar_rate: Option<u32>,
 }
 
 /// Ring buffer capacity in seconds.
@@ -321,12 +325,15 @@ impl Engine {
 
         // ---- guitar input ----
         let guitar_active = s.guitar.is_some();
+        let mut guitar_rate = None;
         if let Some(sel) = &s.guitar {
             let host = host_by_name(sel.host.as_deref())?;
             let dev = find_input(&host, &sel.device)?;
             let cfg = dev.default_input_config()?;
             let in_rate = cfg.sample_rate();
             summary.push(format!("Guitar: {} @ {} Hz", sel.device, in_rate));
+            guitar_rate = Some(in_rate);
+            let chain = s.chain.clone();
 
             let sh = shared.clone();
             let mut gate = NoiseGate::new(in_rate);
@@ -347,7 +354,14 @@ impl Engine {
                     *x *= gain;
                 }
                 gate.process(mono, sh.guitar_gate_db.get());
-                // VST3 chain will process `mono` here (see vst.rs / roadmap).
+                // VST3 chain. try_lock: never block the audio thread.
+                if let Some(slot) = chain.as_ref() {
+                    if let Ok(mut c) = slot.try_lock() {
+                        if let Some(c) = c.as_mut() {
+                            c.process(mono);
+                        }
+                    }
+                }
                 peak.feed(mono);
                 sh.guitar_level.set(peak.value);
 
@@ -496,6 +510,7 @@ impl Engine {
         Ok(Engine {
             _streams: streams,
             summary: summary.join("  ·  "),
+            guitar_rate,
         })
     }
 }

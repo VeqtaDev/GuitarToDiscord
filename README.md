@@ -15,7 +15,9 @@ Guitar To Discord is a small, open-source Windows app written in Rust. It captur
 - Headphone monitoring: hear your guitar only, your voice only, or both (switch live)
 - Auto-detects your audio interface, headset and virtual cable
 - WASAPI by default, native ASIO with a feature flag
-- VST3 scanning (standard Windows folders + your own folders) and an effects chain editor
+- VST3 hosting on the guitar: amp sims and effects run live, with their own editor windows
+- Plugin chain with on/off, reordering and saved plugin settings
+- Each plugin is test-loaded in a separate process first, so a crashing plugin cannot take the app down
 - Black liquid-glass UI, settings saved in `%APPDATA%\GuitarToDiscord\config.json`
 
 ## Setup
@@ -64,8 +66,8 @@ Starts the engine without a window for 3 seconds and prints the levels.
 - [x] Gain, mute, noise gate
 - [x] Headphone monitoring: guitar, voice or both
 - [x] VST3 scan and chain editor
-- [ ] VST3 processing on the guitar signal
-- [ ] Open plugin editors (GUI) from the app
+- [x] VST3 processing on the guitar signal
+- [x] Plugin editors (GUI) and saved plugin settings
 - [ ] Own virtual audio driver ("Guitar To Discord" device, no VB-Cable needed)
 - [ ] System tray mode
 
@@ -76,6 +78,7 @@ Starts the engine without a window for 3 seconds and prints the levels.
 | `src/audio.rs` | Device discovery, capture/playback streams, mixer |
 | `src/dsp.rs` | Resampler, noise gate, soft clip, meters |
 | `src/vst.rs` | VST3 discovery |
+| `src/vst_host.rs` | VST3 hosting: loading, processing, editors, state |
 | `src/theme.rs` | Liquid-glass egui widgets |
 | `src/app.rs` | Application UI |
 | `docs/` | Website (deployed to GitHub Pages) |

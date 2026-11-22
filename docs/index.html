@@ -228,7 +228,7 @@ footer nav{display:flex;gap:18px}
       <div class="f glass rv" style="--i:1"><img class="ic3d" src="img/ic-mix.webp" alt="Table de mixage 3D" loading="lazy"><h3>Mix guitare + voix</h3><p>Gain, mute et noise gate par source. Limiteur doux en sortie.</p></div>
       <div class="f glass rv" style="--i:2"><img class="ic3d" src="img/ic-interface.webp" alt="Interface audio 3D" loading="lazy"><h3>Entrée 1 ou 2</h3><p>Choisis le canal de ta carte son, ou les deux en mono.</p></div>
       <div class="f glass rv" style="--i:3"><img class="ic3d" src="img/ic-wave.webp" alt="Onde sonore 3D" loading="lazy"><h3>44,1 ↔ 48 kHz</h3><p>Rééchantillonnage et correction de dérive automatiques.</p></div>
-      <div class="f glass rv" style="--i:4"><img class="ic3d" src="img/ic-plugins.webp" alt="Blocs de plugins 3D" loading="lazy"><h3>VST3 <span class="soon">BIENTÔT</span></h3><p>Scan de tes dossiers et chaîne d'effets. Le traitement arrive ensuite.</p></div>
+      <div class="f glass rv" style="--i:4"><img class="ic3d" src="img/ic-plugins.webp" alt="Blocs de plugins 3D" loading="lazy"><h3>Plugins VST3</h3><p>Neural DSP, TONEX, Fortin… sur ta guitare en direct, avec leurs fenêtres.</p></div>
     </div>
   </section>
 
@@ -240,6 +240,7 @@ footer nav{display:flex;gap:18px}
         <div class="qa"><button>Ça marche avec ma Focusrite ?<span class="x">+</span></button><div class="ans"><p>Oui, en WASAPI, avec toutes les Focusrite, Scarlett, Audient ou MOTU. Pour l'ASIO, compile avec <code>--features asio</code>.</p></div></div>
         <div class="qa"><button>Discord coupe ma guitare, pourquoi ?<span class="x">+</span></button><div class="ans"><p>C'est la suppression du bruit (Krisp). Coupe-la dans Discord, avec l'annulation d'écho, et baisse le seuil d'activation vocale.</p></div></div>
         <div class="qa"><button>J'ai de l'écho dans mon casque.<span class="x">+</span></button><div class="ans"><p>Vérifie que Windows n'« écoute » pas déjà ta carte son (Propriétés du micro › Écouter). Le retour de l'app suffit.</p></div></div>
+        <div class="qa"><button>Quels plugins je peux utiliser ?<span class="x">+</span></button><div class="ans"><p>Les effets et amplis VST3 64 bits : Neural DSP, TONEX, Fortin, Darkglass… Chaque plugin est testé à part avant d'entrer dans la chaîne, pour qu'un plugin qui plante ne fasse pas tomber l'app. Les instruments ne sont pas pris en charge.</p></div></div>
         <div class="qa"><button>Et OBS, Teams, TeamSpeak ?<span class="x">+</span></button><div class="ans"><p>Tout ce qui accepte un micro : choisis <code>CABLE Output</code> comme entrée.</p></div></div>
       </div>
     </div>
