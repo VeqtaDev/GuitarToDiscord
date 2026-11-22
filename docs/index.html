@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guitar To Discord</title>
+<meta name="description" content="Branche ta guitare dans Discord, en plus de ta voix. App Windows open source en Rust : carte son + micro mixés dans un micro virtuel.">
+<meta name="theme-color" content="#16010a">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23ff4d4d'/><stop offset='1' stop-color='%23c4002a'/></linearGradient></defs><rect width='100' height='100' rx='30' fill='url(%23g)'/><text x='50' y='68' font-size='54' text-anchor='middle'>🎸</text></svg>">
+<style>
+:root{
+  --red:#ff2442;--hot:#ff4d4d;--deep:#c4002a;--crimson:#78001a;--ink:#0e0206;
+  --text:#fff4f6;--dim:#ffc4cc;--ok:#40e68c;
+  --ease:cubic-bezier(.32,.72,0,1);--bounce:cubic-bezier(.34,1.56,.64,1);
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI Variable Display","Segoe UI",Inter,system-ui,sans-serif;
+  background:linear-gradient(180deg,#26020a 0%,#140106 55%,var(--ink) 100%) fixed;
+  color:var(--text);overflow-x:hidden;-webkit-font-smoothing:antialiased;line-height:1.5;
+}
+a{color:inherit;text-decoration:none}
+
+/* ---------- animated liquid backdrop ---------- */
+.bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.blob{position:absolute;border-radius:50%;filter:blur(70px);opacity:.75;mix-blend-mode:screen;will-change:transform}
+.b1{width:62vmax;height:62vmax;left:-18vmax;top:-22vmax;background:radial-gradient(circle,var(--red) 0%,transparent 65%);animation:d1 22s ease-in-out infinite alternate}
+.b2{width:52vmax;height:52vmax;right:-16vmax;top:8vh;background:radial-gradient(circle,var(--deep) 0%,transparent 65%);animation:d2 26s ease-in-out infinite alternate}
+.b3{width:58vmax;height:58vmax;left:20vw;bottom:-36vmax;background:radial-gradient(circle,var(--hot) 0%,transparent 62%);opacity:.5;animation:d3 30s ease-in-out infinite alternate}
+.b4{width:30vmax;height:30vmax;left:-8vmax;bottom:6vh;background:radial-gradient(circle,var(--crimson) 0%,transparent 65%);animation:d2 18s ease-in-out infinite alternate-reverse}
+@keyframes d1{to{transform:translate(12vw,10vh) scale(1.12)}}
+@keyframes d2{to{transform:translate(-10vw,14vh) scale(.9)}}
+@keyframes d3{to{transform:translate(-14vw,-8vh) scale(1.15)}}
+.grain{position:absolute;inset:0;opacity:.07;background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+
+/* ---------- liquid glass (Roamly navbar recipe, in red) ---------- */
+.glass{
+  position:relative;isolation:isolate;
+  background:
+    linear-gradient(135deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,.07) 38%,rgba(255,255,255,.03) 62%,rgba(255,255,255,.13) 100%),
+    rgba(120,0,26,.30);
+  -webkit-backdrop-filter:blur(14px) saturate(190%) brightness(1.06);
+  backdrop-filter:blur(14px) saturate(190%) brightness(1.06);
+  box-shadow:
+    inset 1.5px 1.5px 0 rgba(255,255,255,.55),
+    inset -1px -1px 0 rgba(255,255,255,.18),
+    inset 0 0 30px rgba(255,255,255,.10),
+    0 14px 44px rgba(40,0,10,.45),
+    0 2px 6px rgba(40,0,10,.3);
+}
+.glass::after{ /* specular highlight that follows the pointer */
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
+  background:radial-gradient(260px circle at var(--mx,30%) var(--my,0%),rgba(255,255,255,.22),transparent 60%);
+  opacity:var(--hl,.55);transition:opacity .4s var(--ease);
+}
+
+/* ---------- nav ---------- */
+.nav{
+  position:fixed;left:50%;top:18px;z-index:50;translate:-50% 0;
+  width:min(1080px,calc(100% - 32px));height:64px;border-radius:32px;
+  display:flex;align-items:center;gap:14px;padding:0 10px 0 14px;
+  transition:height .5s var(--ease),top .5s var(--ease),width .5s var(--ease);
+}
+.nav.small{height:54px;top:10px;width:min(880px,calc(100% - 24px))}
+.logo{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-size:20px;
+  background:linear-gradient(135deg,var(--hot),var(--deep));box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 6px 16px rgba(255,36,66,.45)}
+.brand{font-weight:800;letter-spacing:-.01em;font-size:17px}
+.nav .links{display:flex;gap:4px;margin-left:auto}
+.nav .links a{padding:9px 14px;border-radius:20px;font-size:14px;font-weight:600;color:var(--dim);transition:background .25s,color .25s}
+.nav .links a:hover{background:rgba(255,255,255,.1);color:var(--text)}
+@media (max-width:760px){.nav .links a:not(.btn){display:none}}
+
+.btn{
+  display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 22px;border-radius:22px;
+  font-weight:700;font-size:15px;color:var(--text);position:relative;overflow:hidden;
+  background:linear-gradient(120deg,var(--hot) 0%,var(--red) 55%,var(--deep) 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 10px 28px rgba(255,36,66,.45);
+  transition:transform .35s var(--bounce),box-shadow .35s var(--ease);
+}
+.btn::before{content:"";position:absolute;left:8px;right:8px;top:2px;height:50%;border-radius:20px 20px 12px 12px;
+  background:linear-gradient(180deg,rgba(255,255,255,.38),transparent)}
+.btn:hover{transform:translateY(-2px) scale(1.03);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 16px 38px rgba(255,36,66,.6)}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:rgba(255,255,255,.08);box-shadow:inset 1.5px 1.5px 0 rgba(255,255,255,.45),inset -1px -1px 0 rgba(255,255,255,.15),0 10px 28px rgba(0,0,0,.3)}
+.btn.ghost::before{opacity:.5}
+.nav .btn{height:42px;padding:0 18px;font-size:14px}
+
+/* ---------- hero ---------- */
+main{width:min(1080px,calc(100% - 32px));margin:0 auto}
+.hero{min-height:100vh;display:grid;place-items:center;text-align:center;padding:140px 0 80px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:7px 14px 7px 10px;border-radius:20px;font-size:13px;font-weight:600;color:var(--dim)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(64,230,140,.6);animation:pulse 1.8s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 10px rgba(64,230,140,0)}100%{box-shadow:0 0 0 0 rgba(64,230,140,0)}}
+h1{font-size:clamp(44px,8.4vw,104px);line-height:.98;letter-spacing:-.045em;font-weight:800;margin:22px 0 20px}
+.grad{background:linear-gradient(100deg,#fff 0%,#ffd0d6 30%,var(--hot) 58%,var(--red) 78%,#ff8a8a 100%);background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 8s ease-in-out infinite alternate}
+@keyframes shine{to{background-position:100% 0}}
+.lead{font-size:clamp(17px,2vw,21px);color:var(--dim);max-width:640px;margin:0 auto 34px}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.small-note{margin-top:16px;font-size:13px;color:rgba(255,196,204,.7)}
+
+/* ---------- app mockup ---------- */
+.mock{margin:70px auto 0;width:min(860px,100%);border-radius:30px;padding:18px;text-align:left;transform:perspective(1400px) rotateX(10deg);transition:transform 1.2s var(--ease)}
+.mock.in{transform:perspective(1400px) rotateX(0)}
+.mbar{height:54px;border-radius:27px;display:flex;align-items:center;gap:12px;padding:0 8px 0 10px;margin-bottom:14px}
+.mbar .logo{width:34px;height:34px;font-size:16px;border-radius:11px}
+.mbar b{font-size:15px}.mbar small{display:block;font-size:11px;color:var(--dim);font-weight:500}
+.mbar .live{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--ok)}
+.mbar .btn{height:38px;font-size:13px;padding:0 18px}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:640px){.mgrid{grid-template-columns:1fr}}
+.mcard{border-radius:22px;padding:16px}
+.mcard h4{display:flex;align-items:center;gap:10px;font-size:15px;margin-bottom:12px}
+.ic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;font-size:15px;background:linear-gradient(180deg,var(--hot),var(--deep))}
+.sel{height:34px;border-radius:12px;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);display:flex;align-items:center;padding:0 12px;font-size:12.5px;margin-bottom:10px;justify-content:space-between}
+.meter{height:8px;display:flex;gap:2px;margin:10px 0 12px}
+.meter i{flex:1;border-radius:2px;background:rgba(255,255,255,.06);transition:background .08s}
+.slider{font-size:11.5px;color:var(--dim);display:flex;justify-content:space-between;margin-bottom:6px}
+.track{height:10px;border-radius:5px;background:rgba(0,0,0,.32);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);position:relative}
+.track span{position:absolute;inset:0 auto 0 0;border-radius:5px;background:linear-gradient(90deg,var(--deep),var(--hot))}
+.track span::after{content:"";position:absolute;right:-10px;top:50%;width:20px;height:20px;margin-top:-10px;border-radius:50%;background:#fff;box-shadow:0 3px 10px rgba(255,36,66,.55)}
+
+/* ---------- sections ---------- */
+section{padding:110px 0 20px}
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--hot)}
+h2{font-size:clamp(32px,5vw,56px);letter-spacing:-.035em;line-height:1.04;margin:10px 0 16px;font-weight:800}
+.sub{color:var(--dim);font-size:18px;max-width:640px}
+
+.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:14px;margin-top:46px}
+.node{border-radius:26px;padding:26px 22px;text-align:center}
+.node .big{font-size:40px;display:block;margin-bottom:8px}
+.node b{display:block;font-size:18px}.node span{color:var(--dim);font-size:14px}
+.wire{width:70px;height:4px;border-radius:2px;background:rgba(255,255,255,.12);position:relative;overflow:hidden}
+.wire::after{content:"";position:absolute;inset:0;width:40%;border-radius:2px;background:linear-gradient(90deg,transparent,var(--hot),#fff);animation:flow 1.4s linear infinite}
+@keyframes flow{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
+@media (max-width:760px){.flow{grid-template-columns:1fr}.wire{width:4px;height:44px;margin:0 auto}.wire::after{width:100%;height:40%;background:linear-gradient(180deg,transparent,var(--hot),#fff);animation:flowv 1.4s linear infinite}}
+@keyframes flowv{from{transform:translateY(-100%)}to{transform:translateY(260%)}}
+
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:44px}
+@media (max-width:860px){.grid3{grid-template-columns:1fr}}
+.feat{border-radius:26px;padding:26px;transition:transform .5s var(--bounce)}
+.feat:hover{transform:translateY(-6px)}
+.feat .ic{width:44px;height:44px;border-radius:14px;font-size:21px;margin-bottom:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 8px 20px rgba(255,36,66,.4)}
+.feat h3{font-size:19px;letter-spacing:-.01em;margin-bottom:6px}
+.feat p{color:var(--dim);font-size:15px}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;background:rgba(255,255,255,.12);margin-left:6px;vertical-align:middle;color:var(--text)}
+
+.steps{display:grid;gap:14px;margin-top:40px;counter-reset:s}
+.step{border-radius:24px;padding:22px 24px 22px 84px;position:relative;min-height:78px}
+.step::before{counter-increment:s;content:counter(s);position:absolute;left:22px;top:20px;width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-weight:800;font-size:18px;
+  background:linear-gradient(180deg,var(--hot),var(--deep));box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 8px 18px rgba(255,36,66,.4)}
+.step b{display:block;font-size:17px}.step span{color:var(--dim)}
+code{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:.9em;background:rgba(0,0,0,.3);padding:2px 7px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+
+.faq{margin-top:36px;display:grid;gap:12px}
+details{border-radius:22px;padding:0 22px;transition:background .3s}
+summary{list-style:none;cursor:pointer;padding:20px 0;font-weight:700;font-size:17px;display:flex;justify-content:space-between;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-size:24px;font-weight:400;transition:transform .4s var(--bounce);color:var(--hot)}
+details[open] summary::after{transform:rotate(45deg)}
+details p{color:var(--dim);padding:0 0 20px;max-width:780px}
+
+.final{margin:110px 0 40px;border-radius:36px;padding:64px 28px;text-align:center}
+footer{text-align:center;color:rgba(255,196,204,.6);font-size:13px;padding:30px 0 50px}
+footer a{color:var(--dim);text-decoration:underline;text-underline-offset:3px}
+
+/* ---------- reveal ---------- */
+.rv{opacity:0;transform:translateY(34px) scale(.98);filter:blur(6px);transition:opacity 1s var(--ease),transform 1s var(--ease),filter 1s var(--ease)}
+.rv.in{opacity:1;transform:none;filter:none}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.rv{opacity:1;transform:none;filter:none}.mock{transform:none}}
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div><div class="grain"></div></div>
+
+<nav class="nav glass" id="nav">
+  <div class="logo">🎸</div>
+  <span class="brand">Guitar To Discord</span>
+  <div class="links">
+    <a href="#comment">Comment ça marche</a>
+    <a href="#features">Fonctions</a>
+    <a href="#install">Installation</a>
+    <a href="#faq">FAQ</a>
+    <a class="btn" href="https://github.com/VeqtaDev/GuitarToDiscord/releases/latest">Télécharger</a>
+  </div>
+</nav>
+
+<main>
+  <header class="hero">
+    <div>
+      <div class="pill glass rv"><span class="dot"></span>Open source · Rust · Windows</div>
+      <h1 class="rv"><span class="grad">Ta guitare.</span><br>Dans Discord.</h1>
+      <p class="lead rv">Branche ta guitare sur ta carte son, garde ton micro de casque, et envoie les deux dans Discord comme un seul micro. Son natif, sans bricolage.</p>
+      <div class="cta rv">
+        <a class="btn" href="https://github.com/VeqtaDev/GuitarToDiscord/releases/latest">⬇ Télécharger pour Windows</a>
+        <a class="btn ghost" href="https://github.com/VeqtaDev/GuitarToDiscord">★ Voir sur GitHub</a>
+      </div>
+      <p class="small-note rv">Gratuit · Licence MIT · Focusrite, Scarlett, Audient, MOTU… toute carte son WASAPI ou ASIO</p>
+
+      <div class="mock glass rv" id="mock">
+        <div class="mbar glass">
+          <div class="logo">🎸</div>
+          <div><b>Guitar To Discord</b><small>Guitare + voix → un seul micro</small></div>
+          <div class="live"><span class="dot"></span>En direct</div>
+          <span class="btn">Arrêter</span>
+        </div>
+        <div class="mgrid">
+          <div class="mcard glass">
+            <h4><span class="ic">🎸</span>Guitare</h4>
+            <div class="sel">Analogue 1 + 2 (Focusrite USB Audio)<span>▾</span></div>
+            <div class="meter" data-meter="g"></div>
+            <div class="slider"><span>Gain</span><b>+3.0 dB</b></div>
+            <div class="track"><span style="width:56%"></span></div>
+          </div>
+          <div class="mcard glass">
+            <h4><span class="ic">🔊</span>Sortie → Discord</h4>
+            <div class="sel">CABLE Input (VB-Audio Virtual Cable)<span>▾</span></div>
+            <div class="meter" data-meter="o"></div>
+            <div class="slider"><span>Volume envoyé</span><b>+0.0 dB</b></div>
+            <div class="track"><span style="width:66%"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section id="comment">
+    <div class="rv"><div class="eyebrow">Le problème</div>
+    <h2>Discord n'écoute qu'un seul micro.</h2>
+    <p class="sub">Ta guitare est sur ta Focusrite, ta voix sur ton casque. Discord ne prend qu'une entrée. Guitar To Discord mixe les deux en temps réel et les envoie dans un micro virtuel.</p></div>
+    <div class="flow rv">
+      <div class="node glass"><span class="big">🎸🎙</span><b>Carte son + micro</b><span>Focusrite (ASIO / WASAPI) et ton casque</span></div>
+      <div class="wire"></div>
+      <div class="node glass"><span class="big">⚡</span><b>Guitar To Discord</b><span>Mix, gain, noise gate, VST3</span></div>
+      <div class="wire"></div>
+      <div class="node glass"><span class="big">💬</span><b>Discord</b><span>Un micro : « Guitar To Discord »</span></div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="rv"><div class="eyebrow">Fonctions</div><h2>Simple. Rapide. Natif.</h2>
+    <p class="sub">Écrit en Rust, audio temps réel sans allocation, interface liquid glass.</p></div>
+    <div class="grid3">
+      <div class="feat glass rv"><div class="ic">🎚</div><h3>Mix guitare + voix</h3><p>Gain et mute séparés, volume global, soft-clip pour ne jamais saturer dans Discord.</p></div>
+      <div class="feat glass rv"><div class="ic">🎛</div><h3>Choix du canal</h3><p>Entrée 1 ou 2 de ta Focusrite, ou tous les canaux en mono. Rééchantillonnage auto 44.1 ↔ 48 kHz.</p></div>
+      <div class="feat glass rv"><div class="ic">🔇</div><h3>Noise gate</h3><p>Un gate par source pour couper le souffle des micros de guitare entre deux riffs.</p></div>
+      <div class="feat glass rv"><div class="ic">🎧</div><h3>Retour casque</h3><p>Entends ta guitare en direct dans ton casque pendant que tu joues.</p></div>
+      <div class="feat glass rv"><div class="ic">🧩</div><h3>Plugins VST3 <span class="tag">bientôt</span></h3><p>Scan des dossiers Windows standards et de tes dossiers. Chaîne d'effets prête ; traitement audio dans la prochaine version.</p></div>
+      <div class="feat glass rv"><div class="ic">⚡</div><h3>ASIO</h3><p>WASAPI par défaut (toutes les Focusrite). Build ASIO pour la latence la plus basse.</p></div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="rv"><div class="eyebrow">Installation</div><h2>Prêt en 3 minutes.</h2></div>
+    <div class="steps">
+      <div class="step glass rv"><b>Installe VB-Cable (gratuit)</b><span>Il crée le micro virtuel. <a href="https://vb-audio.com/Cable/" style="text-decoration:underline">vb-audio.com/Cable</a></span></div>
+      <div class="step glass rv"><b>Optionnel : renomme-le</b><span>Panneau de configuration › Son › Enregistrement › « CABLE Output » › Propriétés › nom : <code>Guitar To Discord</code></span></div>
+      <div class="step glass rv"><b>Lance Guitar To Discord</b><span>Choisis ta carte son, ton micro et <code>CABLE Input</code> en sortie. Clique sur Démarrer.</span></div>
+      <div class="step glass rv"><b>Dans Discord</b><span>Paramètres › Voix et vidéo › Périphérique d'entrée › <code>CABLE Output</code>. Désactive Krisp / suppression du bruit, sinon ta guitare sera coupée.</span></div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="rv"><div class="eyebrow">FAQ</div><h2>Questions fréquentes.</h2></div>
+    <div class="faq">
+      <details class="glass rv"><summary>Pourquoi il faut VB-Cable ?</summary><p>Créer un vrai périphérique d'entrée Windows demande un pilote audio noyau signé par Microsoft. VB-Cable en fournit un, gratuit et fiable. L'app joue le mix dedans, et Discord le voit comme un micro. Un pilote « Guitar To Discord » maison est dans la roadmap.</p></details>
+      <details class="glass rv"><summary>Ça marche avec ma Focusrite en ASIO ?</summary><p>Oui. Le binaire publié utilise WASAPI, qui fonctionne avec toutes les Focusrite. Pour ASIO, compile avec <code>cargo build --release --features asio</code> (SDK ASIO de Steinberg requis), puis choisis « ASIO » dans le menu Pilote.</p></details>
+      <details class="glass rv"><summary>Et OBS, Teams, TeamSpeak ?</summary><p>Tout ce qui accepte un micro fonctionne : sélectionne simplement « CABLE Output » comme entrée.</p></details>
+      <details class="glass rv"><summary>Les plugins VST3 marchent déjà ?</summary><p>Le scan et la chaîne sont dans cette version. Le traitement audio et l'ouverture des interfaces des plugins arrivent dans la suivante.</p></details>
+    </div>
+  </section>
+
+  <div class="final glass rv">
+    <h2>Joue avec tes potes.<br><span class="grad">En vrai.</span></h2>
+    <p class="sub" style="margin:0 auto 28px">Open source, gratuit, sans compte.</p>
+    <div class="cta"><a class="btn" href="https://github.com/VeqtaDev/GuitarToDiscord/releases/latest">⬇ Télécharger</a><a class="btn ghost" href="https://github.com/VeqtaDev/GuitarToDiscord">Contribuer sur GitHub</a></div>
+  </div>
+</main>
+
+<footer>Guitar To Discord · Licence MIT · <a href="https://github.com/VeqtaDev/GuitarToDiscord">GitHub</a> · VB-Cable est un produit de VB-Audio Software.</footer>
+
+<script>
+// Reveal on scroll
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.14});
+document.querySelectorAll('.rv,.mock').forEach((el,i)=>{el.style.transitionDelay=(el.classList.contains('feat')||el.classList.contains('step')?(i%3)*80:0)+'ms';io.observe(el)});
+// Nav shrinks on scroll
+const nav=document.getElementById('nav');
+addEventListener('scroll',()=>nav.classList.toggle('small',scrollY>40),{passive:true});
+// Specular highlight follows the pointer on every glass surface
+document.addEventListener('pointermove',e=>{
+  for(const g of document.querySelectorAll('.glass')){
+    const r=g.getBoundingClientRect();
+    if(e.clientY<r.top-200||e.clientY>r.bottom+200)continue;
+    g.style.setProperty('--mx',(e.clientX-r.left)+'px');
+    g.style.setProperty('--my',(e.clientY-r.top)+'px');
+  }
+},{passive:true});
+// Fake live meters in the mockup
+const meters=[...document.querySelectorAll('[data-meter]')].map(m=>{for(let i=0;i<32;i++)m.appendChild(document.createElement('i'));return m});
+let ph=0;
+function tick(){
+  ph+=.07;
+  meters.forEach((m,k)=>{
+    const lvl=.45+.3*Math.sin(ph*(k?1.3:1.7))*Math.sin(ph*.37+k)+.15*Math.random();
+    [...m.children].forEach((c,i)=>{const t=i/32;c.style.background=t<lvl?(t>.88?'#fff':`rgb(${196+59*t/.88|0},${36*t|0},${42+35*t|0})`):'rgba(255,255,255,.06)'});
+  });
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches)requestAnimationFrame(tick);
+}
+tick();
+</script>
+</body>
+</html>
