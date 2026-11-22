@@ -12,17 +12,18 @@ Guitar To Discord is a small, open-source Windows app written in Rust. It captur
 - Pick the input channel (Input 1 / Input 2 of your interface, or all channels to mono)
 - Automatic resampling (44.1 kHz ↔ 48 kHz) and clock-drift correction
 - Soft clipper on the output, so Discord never gets a clipped signal
-- Optional headphone monitoring of the guitar
+- Headphone monitoring: hear your guitar only, your voice only, or both (switch live)
 - Auto-detects your audio interface, headset and virtual cable
 - WASAPI by default, native ASIO with a feature flag
 - VST3 scanning (standard Windows folders + your own folders) and an effects chain editor
-- Liquid-glass UI, settings saved in `%APPDATA%\GuitarToDiscord\config.json`
+- Black liquid-glass UI, settings saved in `%APPDATA%\GuitarToDiscord\config.json`
 
 ## Setup
 
 1. Install **[VB-Cable](https://vb-audio.com/Cable/)** (free). It adds a playback device `CABLE Input` and a recording device `CABLE Output`.
 2. Optional: in *Control Panel › Sound › Recording*, open `CABLE Output` › Properties and rename it to `Guitar To Discord`. (The app has a button that opens this panel.)
 3. Run Guitar To Discord. Pick your sound card (guitar), your mic, and `CABLE Input` as the output. Click **Démarrer**.
+   To hear yourself, turn on **Retour casque**, pick your headphones and choose *Guitare*, *Voix* or *Les deux*.
 4. In Discord: *Settings › Voice & Video › Input Device* › `CABLE Output` (or `Guitar To Discord`).
 5. In Discord, turn off **Krisp / noise suppression** and **echo cancellation**, or your guitar will be cut out.
 
@@ -60,7 +61,8 @@ Starts the engine without a window for 3 seconds and prints the levels.
 ## Roadmap
 
 - [x] Guitar + mic mix into a virtual cable
-- [x] Gain, mute, noise gate, monitoring
+- [x] Gain, mute, noise gate
+- [x] Headphone monitoring: guitar, voice or both
 - [x] VST3 scan and chain editor
 - [ ] VST3 processing on the guitar signal
 - [ ] Open plugin editors (GUI) from the app

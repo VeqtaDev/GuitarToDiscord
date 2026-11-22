@@ -47,18 +47,21 @@ fn selftest() {
         guitar: guitar.map(|device| audio::InputSel { host: cfg.host.clone(), device, channel: cfg.guitar_channel }),
         mic: mic.map(|device| audio::InputSel { host: None, device, channel: cfg.mic_channel }),
         output,
-        monitor: None,
+        monitor: audio::guess_headphones(&outs),
     };
+    shared.monitor_mode.store(audio::MonitorMode::Both as u8, std::sync::atomic::Ordering::Relaxed);
+    shared.monitor_gain_db.set(-60.0); // inaudible during the test
     match audio::Engine::start(settings, shared.clone()) {
         Ok(e) => {
             println!("started: {}", e.summary);
             for _ in 0..6 {
                 std::thread::sleep(std::time::Duration::from_millis(500));
                 println!(
-                    "guitar {:.4}  mic {:.4}  out {:.4}  underruns {}",
+                    "guitar {:.4}  mic {:.4}  out {:.4}  monitor {:.6}  underruns {}",
                     shared.guitar_level.get(),
                     shared.mic_level.get(),
                     shared.out_level.get(),
+                    shared.monitor_level.get(),
                     shared.underruns.load(std::sync::atomic::Ordering::Relaxed)
                 );
             }

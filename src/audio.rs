@@ -9,7 +9,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, Host, HostId, SampleFormat, SizedSample, Stream, StreamConfig};
 use ringbuf::traits::{Consumer, Observer, Producer, Split};
 use ringbuf::{HeapCons, HeapProd, HeapRb};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
 // ---------------------------------------------------------------------------
@@ -40,6 +40,9 @@ pub struct Shared {
     pub mic_gain_db: AtomicF32,
     pub master_gain_db: AtomicF32,
     pub monitor_gain_db: AtomicF32,
+    /// What the headphone return plays: see `MonitorMode`.
+    pub monitor_mode: AtomicU8,
+    pub monitor_level: AtomicF32,
     pub guitar_gate_db: AtomicF32,
     pub mic_gate_db: AtomicF32,
     pub guitar_muted: AtomicBool,
@@ -66,6 +69,25 @@ impl Shared {
         log::error!("audio: {msg}");
         if let Ok(mut g) = self.last_error.lock() {
             *g = Some(e.to_string());
+        }
+    }
+}
+
+/// Headphone return content. Stored as u8 in `Shared::monitor_mode`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
+pub enum MonitorMode {
+    #[default]
+    Guitar = 0,
+    Voice = 1,
+    Both = 2,
+}
+
+impl MonitorMode {
+    pub fn from_u8(v: u8) -> Self {
+        match v {
+            1 => MonitorMode::Voice,
+            2 => MonitorMode::Both,
+            _ => MonitorMode::Guitar,
         }
     }
 }
@@ -192,6 +214,14 @@ pub fn guess_guitar(list: &[DeviceInfo]) -> Option<String> {
         .map(|d| d.name.clone())
 }
 
+pub fn guess_headphones(list: &[DeviceInfo]) -> Option<String> {
+    let ok = |d: &&DeviceInfo| !is_virtual_cable(&d.name) && !d.name.to_lowercase().contains("voicemeeter");
+    ["casque", "headphone", "headset", "hyperx", "écouteurs", "focusrite"]
+        .iter()
+        .find_map(|k| list.iter().filter(ok).find(|d| d.name.to_lowercase().contains(k)))
+        .map(|d| d.name.clone())
+}
+
 pub fn guess_mic(list: &[DeviceInfo], guitar: Option<&str>) -> Option<String> {
     let ok = |d: &&DeviceInfo| {
         let n = d.name.to_lowercase();
@@ -284,6 +314,10 @@ impl Engine {
             Some((p, c)) => (Some(p), Some(c)),
             None => (None, None),
         };
+        let (m_mon_p, m_mon_c) = match mon.as_ref().map(|(_, c)| ring(c.sample_rate())) {
+            Some((p, c)) => (Some(p), Some(c)),
+            None => (None, None),
+        };
 
         // ---- guitar input ----
         let guitar_active = s.guitar.is_some();
@@ -342,6 +376,8 @@ impl Engine {
             let mut gate = NoiseGate::new(in_rate);
             let mut rs = Resampler::new(in_rate, out_rate);
             let mut prod = m_main_p;
+            let mut rs_mon = mon.as_ref().map(|(_, c)| Resampler::new(in_rate, c.sample_rate()));
+            let mut prod_mon = m_mon_p;
             let mut tmp: Vec<f32> = Vec::with_capacity(16_384);
             let mut peak = Peak::default();
 
@@ -360,6 +396,11 @@ impl Engine {
                 tmp.clear();
                 rs.process(mono, &mut tmp);
                 prod.push_slice(&tmp);
+                if let (Some(r), Some(p)) = (rs_mon.as_mut(), prod_mon.as_mut()) {
+                    tmp.clear();
+                    r.process(mono, &mut tmp);
+                    p.push_slice(&tmp);
+                }
             };
             streams.push(build_input(&dev, &cfg, sel.channel, on_mono, shared.clone())?);
         }
@@ -401,24 +442,46 @@ impl Engine {
             streams.push(build_output(&out_dev, &out_cfg, fill, shared.clone())?);
         }
 
-        // ---- monitor output stream: guitar only ----
-        if let (Some((dev, cfg)), Some(mut c)) = (mon, g_mon_c) {
+        // ---- monitor output stream: guitar, voice or both (switchable live) ----
+        if let (Some((dev, cfg)), Some(mut gc), Some(mut mc)) = (mon, g_mon_c, m_mon_c) {
             let sh = shared.clone();
             let rate = cfg.sample_rate();
             let target = (rate as f32 * TARGET_LATENCY) as usize;
             let max = (rate as f32 * MAX_LATENCY) as usize;
-            let mut primed = false;
+            let mut primed_g = false;
+            let mut primed_m = false;
+            let mut peak = Peak::default();
             let fill = move |buf: &mut [f32], channels: usize| {
                 let frames = buf.len() / channels;
                 let gain = db_to_lin(sh.monitor_gain_db.get());
-                drift_control(&mut c, &mut primed, target, max, frames);
+                let mode = MonitorMode::from_u8(sh.monitor_mode.load(Ordering::Relaxed));
+                let (use_g, use_m) = match mode {
+                    MonitorMode::Guitar => (true, false),
+                    MonitorMode::Voice => (false, true),
+                    MonitorMode::Both => (true, true),
+                };
+                // Both rings are always drained so switching mode never plays stale audio.
+                drift_control(&mut gc, &mut primed_g, target, max, frames);
+                drift_control(&mut mc, &mut primed_m, target, max, frames);
+                let mut p = 0f32;
                 for f in 0..frames {
-                    let v = if primed { c.try_pop().unwrap_or(0.0) } else { 0.0 };
+                    let g = if guitar_active && primed_g { gc.try_pop().unwrap_or(0.0) } else { 0.0 };
+                    let m = if mic_active && primed_m { mc.try_pop().unwrap_or(0.0) } else { 0.0 };
+                    let mut v = 0.0;
+                    if use_g {
+                        v += g;
+                    }
+                    if use_m {
+                        v += m;
+                    }
                     let v = soft_clip(v * gain);
+                    p = p.max(v.abs());
                     for ch in 0..channels {
                         buf[f * channels + ch] = v;
                     }
                 }
+                peak.value = if p > peak.value { p } else { peak.value * 0.92 };
+                sh.monitor_level.set(peak.value);
             };
             streams.push(build_output(&dev, &cfg, fill, shared.clone())?);
         }

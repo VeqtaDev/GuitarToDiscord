@@ -1,6 +1,6 @@
 [package]
 name = "guitar-to-discord"
-version = "0.1.0"
+version = "0.2.0"
 description = "Mix your guitar (sound card) and your mic into one virtual microphone for Discord."
 license = "MIT"
 repository = "https://github.com/VeqtaDev/GuitarToDiscord"

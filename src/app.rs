@@ -75,6 +75,9 @@ impl App {
         if self.cfg.mic_device.is_none() {
             self.cfg.mic_device = audio::guess_mic(&self.inputs, self.cfg.guitar_device.as_deref());
         }
+        if self.cfg.monitor_device.is_none() {
+            self.cfg.monitor_device = audio::guess_headphones(&self.outputs);
+        }
     }
 
     fn rescan_plugins(&mut self) {
@@ -89,6 +92,7 @@ impl App {
         s.mic_gain_db.set(self.cfg.mic_gain_db);
         s.master_gain_db.set(self.cfg.master_gain_db);
         s.monitor_gain_db.set(self.cfg.monitor_gain_db);
+        s.monitor_mode.store(self.cfg.monitor_mode as u8, Ordering::Relaxed);
         s.guitar_gate_db.set(self.cfg.guitar_gate_db);
         s.mic_gate_db.set(self.cfg.mic_gate_db);
         s.guitar_muted.store(self.cfg.guitar_muted, Ordering::Relaxed);
@@ -275,7 +279,7 @@ impl App {
         let running = self.engine.is_some();
         let h = 54.0;
         let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), h), egui::Sense::hover());
-        // Logo: guitar pick + lowercase wordmark, like "roamly".
+        // Logo: guitar pick + lowercase wordmark.
         let pick = egui::Rect::from_min_size(egui::pos2(rect.left(), rect.center().y - 15.0), Vec2::splat(30.0));
         draw_pick(ui.painter(), pick);
         ui.painter().text(
@@ -436,7 +440,7 @@ impl App {
                 ui.add_space(14.0);
                 theme::card(ui, 0.15, |ui| {
                     ui.horizontal(|ui| {
-                        theme::section_title(ui, "∩", "Retour casque", "Entendre ta guitare en direct");
+                        theme::section_title(ui, "∩", "Retour casque", "T'entendre en direct dans ton casque");
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if theme::toggle(ui, &mut self.cfg.monitor_enabled).changed() {
                                 restart = true;
@@ -445,9 +449,24 @@ impl App {
                         });
                     });
                     if self.cfg.monitor_enabled {
+                        ui.label(RichText::new("Ce que tu entends").font(theme::bold(12.0)).color(TEXT_DIM));
+                        let mut idx = self.cfg.monitor_mode as usize;
+                        if theme::choice(ui, "mon_mode", &mut idx, &["Guitare", "Voix", "Les deux"]) {
+                            self.cfg.monitor_mode = match idx {
+                                1 => audio::MonitorMode::Voice,
+                                2 => audio::MonitorMode::Both,
+                                _ => audio::MonitorMode::Guitar,
+                            };
+                            self.dirty = true;
+                        }
+                        ui.label(RichText::new("Sortie casque").font(theme::bold(12.0)).color(TEXT_DIM));
                         if device_combo(ui, "mon_dev", &mut self.cfg.monitor_device, &self.outputs, false) {
                             restart = true;
                             self.dirty = true;
+                        }
+                        theme::meter(ui, self.shared.monitor_level.get());
+                        if self.cfg.monitor_device.as_deref().map(audio::is_virtual_cable).unwrap_or(false) {
+                            ui.label(RichText::new("Choisis ton casque ici, pas le câble virtuel.").font(theme::bold(12.5)).color(theme::RED_HOT));
                         }
                         if theme::slider(ui, &mut self.cfg.monitor_gain_db, -40.0, 6.0, "Volume retour", "dB").changed() {
                             self.dirty = true;

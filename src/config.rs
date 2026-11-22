@@ -27,6 +27,7 @@ pub struct Config {
     pub output_device: Option<String>,
     pub monitor_device: Option<String>,
     pub monitor_enabled: bool,
+    pub monitor_mode: crate::audio::MonitorMode,
 
     pub guitar_gain_db: f32,
     pub mic_gain_db: f32,
@@ -53,6 +54,7 @@ impl Default for Config {
             output_device: None,
             monitor_device: None,
             monitor_enabled: false,
+            monitor_mode: crate::audio::MonitorMode::Guitar,
             guitar_gain_db: 0.0,
             mic_gain_db: 0.0,
             master_gain_db: 0.0,

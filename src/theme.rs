@@ -1,6 +1,5 @@
-//! Roamly art direction, in red, for egui: light page, white glass
-//! cards (`.gw`), dark glass nav pill (`.gl`), heavy italic headings,
-//! red gradient buttons with a white "key" (`.pxb`).
+//! Black liquid-glass theme for egui: dark glass cards, glass nav pill,
+//! heavy italic headings, red gradient buttons with a white "key".
 
 use eframe::egui::{
     self, epaint::Mesh, Align2, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId,
@@ -10,21 +9,21 @@ use eframe::epaint::Shadow;
 use std::f32::consts::TAU;
 
 // ---------------------------------------------------------------------------
-// Palette (Roamly tokens shifted to red)
+// Palette (black + red)
 // ---------------------------------------------------------------------------
 
-pub const BG: Color32 = Color32::from_rgb(253, 241, 242); // Roamly #F1F6FC
-pub const INK: Color32 = Color32::from_rgb(71, 10, 20); // #0A2347
+pub const BG: Color32 = Color32::from_rgb(8, 4, 6);
+pub const INK: Color32 = Color32::from_rgb(255, 240, 242);
 #[allow(dead_code)]
-pub const INK2: Color32 = Color32::from_rgb(95, 36, 48); // #24405F
-pub const MUTE: Color32 = Color32::from_rgb(138, 74, 85); // #4A6385
+pub const INK2: Color32 = Color32::from_rgb(230, 190, 197);
+pub const MUTE: Color32 = Color32::from_rgb(178, 138, 146);
 #[allow(dead_code)]
-pub const MUTE2: Color32 = Color32::from_rgb(163, 107, 116); // #6B82A3
-pub const LINE: Color32 = Color32::from_rgb(242, 214, 218); // #DCE6F2
-pub const TINT: Color32 = Color32::from_rgb(252, 228, 231); // #E3EFFC
-pub const R1: Color32 = Color32::from_rgb(255, 77, 94); // #2272DB
-pub const R2: Color32 = Color32::from_rgb(200, 16, 46); // #1452AE
-pub const R3: Color32 = Color32::from_rgb(255, 154, 164); // #6BB8F5
+pub const MUTE2: Color32 = Color32::from_rgb(130, 96, 104);
+pub const LINE: Color32 = Color32::from_rgb(52, 26, 32);
+pub const TINT: Color32 = Color32::from_rgb(40, 14, 20);
+pub const R1: Color32 = Color32::from_rgb(255, 77, 94);
+pub const R2: Color32 = Color32::from_rgb(200, 16, 46);
+pub const R3: Color32 = Color32::from_rgb(255, 154, 164);
 pub const OK: Color32 = Color32::from_rgb(31, 184, 114);
 
 // Names used by app.rs
@@ -98,17 +97,17 @@ pub fn install(ctx: &egui::Context) {
     style.spacing.combo_width = 260.0;
 
     let v = &mut style.visuals;
-    *v = egui::Visuals::light();
+    *v = egui::Visuals::dark();
     v.override_text_color = Some(INK);
     v.panel_fill = BG;
-    v.window_fill = Color32::WHITE;
+    v.window_fill = Color32::from_rgb(22, 10, 13);
     v.window_stroke = Stroke::new(1.0, LINE);
     v.window_corner_radius = CornerRadius::same(18);
     v.menu_corner_radius = CornerRadius::same(16);
-    v.popup_shadow = Shadow { offset: [0, 14], blur: 32, spread: 0, color: rgba(INK, 0.16) };
-    v.extreme_bg_color = Color32::WHITE;
-    v.selection.bg_fill = TINT;
-    v.selection.stroke = Stroke::new(1.0, R2);
+    v.popup_shadow = Shadow { offset: [0, 14], blur: 32, spread: 0, color: Color32::from_black_alpha(160) };
+    v.extreme_bg_color = Color32::from_rgb(18, 9, 12);
+    v.selection.bg_fill = rgba(R2, 0.45);
+    v.selection.stroke = Stroke::new(1.0, R1);
     v.hyperlink_color = R1;
     let r = CornerRadius::same(14);
     for w in [&mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
@@ -118,16 +117,16 @@ pub fn install(ctx: &egui::Context) {
     }
     v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, LINE);
     v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, MUTE);
-    v.widgets.inactive.weak_bg_fill = Color32::WHITE;
-    v.widgets.inactive.bg_fill = Color32::WHITE;
+    v.widgets.inactive.weak_bg_fill = Color32::from_rgb(24, 12, 15);
+    v.widgets.inactive.bg_fill = Color32::from_rgb(24, 12, 15);
     v.widgets.inactive.bg_stroke = Stroke::new(1.5, LINE);
-    v.widgets.hovered.weak_bg_fill = Color32::WHITE;
-    v.widgets.hovered.bg_fill = Color32::WHITE;
+    v.widgets.hovered.weak_bg_fill = Color32::from_rgb(24, 12, 15);
+    v.widgets.hovered.bg_fill = Color32::from_rgb(24, 12, 15);
     v.widgets.hovered.bg_stroke = Stroke::new(1.5, R3);
     v.widgets.active.weak_bg_fill = TINT;
     v.widgets.active.bg_fill = TINT;
     v.widgets.active.bg_stroke = Stroke::new(1.5, R1);
-    v.widgets.open.weak_bg_fill = Color32::WHITE;
+    v.widgets.open.weak_bg_fill = Color32::from_rgb(24, 12, 15);
     v.widgets.open.bg_stroke = Stroke::new(1.5, R1);
     ctx.set_global_style(style);
 }
@@ -140,7 +139,7 @@ pub fn black(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name("black".into()))
 }
 
-/// Roamly `.lbl`: small heavy uppercase label.
+/// Small heavy uppercase label.
 #[allow(dead_code)]
 pub fn lbl(ui: &mut Ui, text: &str) {
     ui.label(egui::RichText::new(text.to_uppercase()).font(bold(11.5)).color(MUTE).extra_letter_spacing(0.9));
@@ -213,50 +212,40 @@ pub fn radial_blob(center: Pos2, radius: f32, color: Color32) -> Shape {
 pub fn backdrop(ui: &Ui, rect: Rect, t: f32, live: f32) {
     let p = ui.painter();
     p.rect_filled(rect, CornerRadius::ZERO, BG);
-    let band = Rect::from_min_size(rect.min, Vec2::new(rect.width(), 230.0));
+    let band = Rect::from_min_size(rect.min, Vec2::new(rect.width(), 260.0));
     p.add(gradient_rrect(band, 0.0, |pt| {
         let y = (pt.y - band.top()) / band.height();
-        stops(
-            &[
-                (0.0, Color32::from_rgb(122, 10, 28)),
-                (0.35, Color32::from_rgb(214, 30, 56)),
-                (0.7, Color32::from_rgb(246, 160, 170)),
-                (1.0, BG),
-            ],
-            y,
-        )
+        stops(&[(0.0, Color32::from_rgb(70, 4, 16)), (0.5, Color32::from_rgb(34, 4, 10)), (1.0, BG)], y)
     }));
-    // Moving spotlights (like the site hero beams).
     let w = rect.width();
-    for (i, (x, sp, a)) in [(0.15, 0.31, 0.30), (0.5, 0.23, 0.22), (0.85, 0.27, 0.30)].iter().enumerate() {
-        let cx = rect.left() + w * (x + 0.05 * (t * sp + i as f32).sin());
-        p.add(radial_blob(Pos2::new(cx, rect.top() + 40.0), 220.0, white(a * (0.7 + 0.3 * live))));
+    for (i, (x, sp, a)) in [(0.12, 0.31, 0.55), (0.5, 0.23, 0.35), (0.88, 0.27, 0.55)].iter().enumerate() {
+        let cx = rect.left() + w * (x + 0.06 * (t * sp + i as f32).sin());
+        p.add(radial_blob(Pos2::new(cx, rect.top() + 20.0), 260.0, rgba(R2, a * (0.6 + 0.4 * live))));
     }
+    let cx = rect.left() + w * (0.5 + 0.2 * (t * 0.11).sin());
+    p.add(radial_blob(Pos2::new(cx, rect.bottom() + 60.0), 420.0, rgba(Color32::from_rgb(120, 6, 28), 0.35)));
 }
 
 // ---------------------------------------------------------------------------
 // Glass surfaces
 // ---------------------------------------------------------------------------
 
-/// White glass card (`.gw`).
+/// Dark glass card.
 pub fn gw_shapes(rect: Rect, radius: f32) -> Vec<Shape> {
     let cr = CornerRadius::same(radius as u8);
     let mut v = Vec::new();
-    let s1 = Shadow { offset: [0, 20], blur: 40, spread: 0, color: rgba(INK, 0.12) };
-    let s2 = Shadow { offset: [0, 2], blur: 6, spread: 2, color: rgba(INK, 0.05) };
+    let s1 = Shadow { offset: [0, 20], blur: 44, spread: 0, color: Color32::from_black_alpha(150) };
     v.push(Shape::Rect(s1.as_shape(rect, cr)));
-    v.push(Shape::Rect(s2.as_shape(rect, cr)));
     v.push(gradient_rrect(rect, radius, |p| {
-        // radial white highlight top-left + faint red tint bottom
-        let dx = (p.x - (rect.left() + rect.width() * 0.2)) / (rect.width() * 0.6);
-        let dy = (p.y - rect.top()) / (rect.height() * 0.5);
+        let dx = (p.x - (rect.left() + rect.width() * 0.2)) / (rect.width() * 0.7);
+        let dy = (p.y - rect.top()) / (rect.height() * 0.6);
         let hl = (1.0 - (dx * dx + dy * dy).sqrt()).clamp(0.0, 1.0);
         let by = ((p.y - rect.top()) / rect.height()).clamp(0.0, 1.0);
-        let base = lerp_color(Color32::from_rgb(255, 252, 252), Color32::from_rgb(255, 245, 246), by);
-        lerp_color(base, Color32::WHITE, hl)
+        let base = lerp_color(Color32::from_rgba_premultiplied(26, 12, 15, 236), Color32::from_rgba_premultiplied(18, 7, 10, 236), by);
+        lerp_color(base, Color32::from_rgba_premultiplied(58, 24, 30, 240), hl * 0.6)
     }));
-    v.push(Shape::Rect(egui::epaint::RectShape::stroke(rect, cr, Stroke::new(1.0, rgba(LINE, 0.9)), StrokeKind::Inside)));
-    v.push(top_rim(rect, radius, 0.95));
+    v.push(Shape::Rect(egui::epaint::RectShape::stroke(rect, cr, Stroke::new(1.0, white(0.07)), StrokeKind::Inside)));
+    v.push(top_rim(rect, radius, 0.35));
     v
 }
 
@@ -314,7 +303,7 @@ pub fn card<R>(ui: &mut Ui, _tint: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     r
 }
 
-/// Heading with a red gradient icon tile, Roamly style.
+/// Heading with a red gradient icon tile.
 pub fn section_title(ui: &mut Ui, icon: &str, title: &str, subtitle: &str) {
     ui.horizontal(|ui| {
         let (r, _) = ui.allocate_exact_size(Vec2::splat(40.0), Sense::hover());
@@ -324,7 +313,7 @@ pub fn section_title(ui: &mut Ui, icon: &str, title: &str, subtitle: &str) {
         ui.painter().text(r.center(), Align2::CENTER_CENTER, icon, FontId::proportional(18.0), Color32::WHITE);
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
-            ui.label(egui::RichText::new(title).font(black(20.0)).color(R2));
+            ui.label(egui::RichText::new(title).font(black(20.0)).color(INK));
             ui.label(egui::RichText::new(subtitle).font(bold(13.0)).color(MUTE));
         });
     });
@@ -335,7 +324,7 @@ pub fn section_title(ui: &mut Ui, icon: &str, title: &str, subtitle: &str) {
 // Controls
 // ---------------------------------------------------------------------------
 
-/// Roamly `.pxb`: red gradient button with a white key that expands on hover.
+/// Red gradient button with a white key that expands on hover.
 pub fn pill_button(ui: &mut Ui, text: &str, primary: bool, width: f32) -> Response {
     let h = 50.0;
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, h), Sense::click());
@@ -343,7 +332,7 @@ pub fn pill_button(ui: &mut Ui, text: &str, primary: bool, width: f32) -> Respon
     let press = if resp.is_pointer_button_down_on() { 0.95 } else { 1.0 };
     let rect = Rect::from_center_size(rect.center(), rect.size() * press);
     let p = ui.painter();
-    let (c1, c2, sh) = if primary { (R1, R2, rgba(R2, 0.35)) } else { (Color32::from_rgb(90, 14, 28), Color32::from_rgb(52, 6, 14), rgba(INK, 0.3)) };
+    let (c1, c2, sh) = if primary { (R1, R2, rgba(R2, 0.5)) } else { (Color32::from_rgb(70, 20, 30), Color32::from_rgb(40, 10, 16), Color32::from_black_alpha(120)) };
     let shadow = Shadow { offset: [0, 8], blur: 20, spread: 0, color: sh };
     p.add(Shape::Rect(shadow.as_shape(rect, CornerRadius::same(17))));
     p.add(gradient_rrect(rect, 17.0, |pt| lerp_color(c1, c2, (pt.y - rect.top()) / rect.height())));
@@ -351,9 +340,9 @@ pub fn pill_button(ui: &mut Ui, text: &str, primary: bool, width: f32) -> Respon
     // key
     let kw = 44.0 + (rect.width() - 8.0 - 44.0) * ease_back(hover);
     let key = Rect::from_min_size(rect.min + Vec2::new(4.0, 4.0), Vec2::new(kw, h - 8.0));
-    let ksh = Shadow { offset: [0, 2], blur: 6, spread: 0, color: rgba(INK, 0.22) };
+    let ksh = Shadow { offset: [0, 2], blur: 6, spread: 0, color: Color32::from_black_alpha(70) };
     p.add(Shape::Rect(ksh.as_shape(key, CornerRadius::same(13))));
-    p.add(gradient_rrect(key, 13.0, |pt| lerp_color(Color32::WHITE, TINT, (pt.y - key.top()) / key.height())));
+    p.add(gradient_rrect(key, 13.0, |pt| lerp_color(Color32::WHITE, Color32::from_rgb(252, 228, 231), (pt.y - key.top()) / key.height())));
     let ic = Pos2::new(key.right() - 22.0, key.center().y);
     if primary {
         p.add(Shape::convex_polygon(
@@ -371,7 +360,7 @@ pub fn pill_button(ui: &mut Ui, text: &str, primary: bool, width: f32) -> Respon
 }
 
 fn ease_back(t: f32) -> f32 {
-    // slight overshoot, like Roamly's --bounce
+    // slight overshoot for a springy feel
     let c1 = 1.4;
     let c3 = c1 + 1.0;
     let x = t - 1.0;
@@ -385,15 +374,15 @@ pub fn chip(ui: &mut Ui, text: &str) -> Response {
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let hover = ui.ctx().animate_bool_with_time(resp.id, resp.hovered(), 0.15);
     let p = ui.painter();
-    let sh = Shadow { offset: [0, 4], blur: 12, spread: 0, color: rgba(INK, 0.08 + 0.06 * hover) };
+    let sh = Shadow { offset: [0, 4], blur: 12, spread: 0, color: Color32::from_black_alpha(90) };
     p.add(Shape::Rect(sh.as_shape(rect, CornerRadius::same(12))));
-    p.rect_filled(rect, CornerRadius::same(12), Color32::WHITE);
-    p.rect_stroke(rect, CornerRadius::same(12), Stroke::new(1.5, lerp_color(LINE, R3, hover)), StrokeKind::Inside);
+    p.rect_filled(rect, CornerRadius::same(12), lerp_color(Color32::from_rgb(30, 14, 18), Color32::from_rgb(48, 18, 25), hover));
+    p.rect_stroke(rect, CornerRadius::same(12), Stroke::new(1.0, lerp_color(white(0.10), rgba(R1, 0.8), hover)), StrokeKind::Inside);
     p.galley(rect.center() - galley.size() / 2.0, galley, INK);
     resp
 }
 
-/// iOS switch in the Roamly palette.
+/// iOS-style switch.
 pub fn toggle(ui: &mut Ui, on: &mut bool) -> Response {
     let size = Vec2::new(52.0, 31.0);
     let (rect, mut resp) = ui.allocate_exact_size(size, Sense::click());
@@ -412,13 +401,13 @@ pub fn toggle(ui: &mut Ui, on: &mut bool) -> Response {
     let kw = kh * stretch;
     let x = rect.left() + 2.0 + t * (rect.width() - 4.0 - kw);
     let knob = Rect::from_min_size(Pos2::new(x, rect.top() + 2.0), Vec2::new(kw, kh));
-    let sh = Shadow { offset: [0, 3], blur: 8, spread: 0, color: rgba(INK, 0.25) };
+    let sh = Shadow { offset: [0, 3], blur: 8, spread: 0, color: Color32::from_black_alpha(110) };
     p.add(Shape::Rect(sh.as_shape(knob, CornerRadius::same(13))));
     p.rect_filled(knob, CornerRadius::same(13), Color32::WHITE);
     resp
 }
 
-/// Roamly range: thin track, red fill, white thumb with a red ring.
+/// Range: thin track, red fill, white thumb with a red ring.
 pub fn slider(ui: &mut Ui, value: &mut f32, min: f32, max: f32, label: &str, unit: &str) -> Response {
     let width = ui.available_width();
     let h = 50.0;
@@ -443,7 +432,7 @@ pub fn slider(ui: &mut Ui, value: &mut f32, min: f32, max: f32, label: &str, uni
     let p = ui.painter();
     p.text(rect.left_top(), Align2::LEFT_TOP, label.to_uppercase(), bold(11.5), MUTE);
     let val = if *value <= min + 0.01 && unit == "dB" && min <= -90.0 { "Off".to_owned() } else { format!("{:+.1} {unit}", value) };
-    p.text(rect.right_top(), Align2::RIGHT_TOP, val, black(15.0), R2);
+    p.text(rect.right_top(), Align2::RIGHT_TOP, val, black(15.0), R1);
     p.rect_filled(track, CornerRadius::same(5), TINT);
     let fill = Rect::from_min_max(track.min, Pos2::new(track.left() + t * track.width(), track.bottom()));
     if fill.width() > 1.0 {
@@ -487,7 +476,7 @@ pub fn status_dot(ui: &mut Ui, on: bool, t: f32) {
     ui.painter().circle_filled(c, 4.5, if on { OK } else { white(0.45) });
 }
 
-/// Dark glass nav pill with a sliding translucent pill (Roamly nav).
+/// Dark glass nav pill with a sliding translucent pill.
 pub fn segmented(ui: &mut Ui, id: &str, selected: &mut usize, items: &[&str]) {
     let font = bold(14.0);
     let widths: Vec<f32> = items
@@ -521,4 +510,35 @@ pub fn segmented(ui: &mut Ui, id: &str, selected: &mut usize, items: &[&str]) {
         let a = if i == *selected { 1.0 } else if resp.hovered() { 0.85 } else { 0.62 };
         ui.painter().text(r.center(), Align2::CENTER_CENTER, *label, font.clone(), white(a));
     }
+}
+
+/// Small segmented choice for in-card options (dark glass, red pill).
+pub fn choice(ui: &mut Ui, id: &str, selected: &mut usize, items: &[&str]) -> bool {
+    let font = bold(13.5);
+    let w = ui.available_width();
+    let h = 40.0;
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(w, h), Sense::hover());
+    let p = ui.painter();
+    p.rect_filled(rect, CornerRadius::same(14), Color32::from_rgb(16, 7, 10));
+    p.rect_stroke(rect, CornerRadius::same(14), Stroke::new(1.0, white(0.07)), StrokeKind::Inside);
+    let n = items.len() as f32;
+    let iw = (w - 8.0) / n;
+    let sid = ui.scope_id().with(id);
+    let ax = ui.ctx().animate_value_with_time(sid.with("x"), *selected as f32, 0.3);
+    let pill = Rect::from_min_size(rect.min + Vec2::new(4.0 + ax * iw, 4.0), Vec2::new(iw, h - 8.0));
+    let sh = Shadow { offset: [0, 4], blur: 12, spread: 0, color: rgba(R2, 0.5) };
+    p.add(Shape::Rect(sh.as_shape(pill, CornerRadius::same(11))));
+    p.add(gradient_rrect(pill, 11.0, |pt| lerp_color(R1, R2, (pt.y - pill.top()) / pill.height())));
+    let mut changed = false;
+    for (i, label) in items.iter().enumerate() {
+        let r = Rect::from_min_size(rect.min + Vec2::new(4.0 + i as f32 * iw, 4.0), Vec2::new(iw, h - 8.0));
+        let resp = ui.interact(r, sid.with(i), Sense::click());
+        if resp.clicked() && *selected != i {
+            *selected = i;
+            changed = true;
+        }
+        let a = if i == *selected { 1.0 } else if resp.hovered() { 0.85 } else { 0.55 };
+        ui.painter().text(r.center(), Align2::CENTER_CENTER, *label, font.clone(), white(a));
+    }
+    changed
 }
